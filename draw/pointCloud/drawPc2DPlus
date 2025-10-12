@@ -1,0 +1,102 @@
+function drawPc2DPlus(pcPoints, varargin)
+% drawPc2DPlus - (最终鲁棒版) 绘制2D俯视点云图，即使没有点云数据也会生成空白图
+%
+% 功能:
+%   - 将输入的2D点云坐标绘制成俯视图 (X-Y平面)
+%   - 如果提供聚类信息，则用不同颜色区分不同的物体簇
+%   - 如果提供功率信息，则用点的大小表示信号强度
+%   - 自动在原点(0,0)标出雷达位置
+%   - 如果输入点云为空，则生成一个带有坐标轴和雷达图标的空白图
+%
+% 输入:
+% 1. pcPoints: 一个 N x 2 的矩阵, 包含点云的 [X, Y] 坐标。可以为空矩阵[]。
+% 2. varargin (可选参数对):
+%     - 'clusterID': 一个 N x 1 的向量, 包含每个点所属的簇ID。
+%     - 'power': 一个 N x 1 的向量, 包含每个点的反射强度。
+%     - 'limitX': X轴的显示范围, e.g., [-4, 4]
+%     - 'limitY': Y轴的显示范围, e.g., [0, 8]
+%
+% 作者: Gemini & 刘涵凯
+% 更新: 2025-10-12
+
+%% 1. 解析输入参数
+p = inputParser();
+p.addOptional('clusterID', []);
+p.addOptional('power', []);
+p.addOptional('limitX', []);
+p.addOptional('limitY', []);
+p.parse(varargin{:});
+
+clusterID = p.Results.clusterID;
+power = p.Results.power;
+limitX = p.Results.limitX;
+limitY = p.Results.limitY;
+
+%% 2. 创建一个新的图窗并进行基本设置
+figure('Name', '2D Top-Down View Point Cloud');
+hold on; % 准备在同一张图上绘制所有内容
+legendEntries = {}; % 初始化图例条目
+
+%% 3. 检查输入数据是否有效，并绘制点云
+if ~isempty(pcPoints)
+    % --- 如果有点云数据，则执行完整的绘制流程 ---
+    
+    % 3.1. 根据功率计算点的大小 (可选)
+    if ~isempty(power) && max(power) > min(power)
+        minSize = 10; % 最小点大小
+        maxSize = 100; % 最大点大小
+        normPower = (power - min(power)) / (max(power) - min(power) + eps);
+        pointSizes = minSize + normPower * (maxSize - minSize);
+    else
+        pointSizes = 36; % 默认大小
+    end
+    
+    % 3.2. 绘制点云
+    if ~isempty(clusterID) && max(clusterID) > 0
+        % 按簇绘制不同颜色
+        numClusters = max(clusterID);
+        colors = lines(numClusters); 
+        for i = 1 : numClusters
+            idx = (clusterID == i);
+            if ~any(idx); continue; end
+            scatter(pcPoints(idx, 1), pcPoints(idx, 2), pointSizes(idx), colors(i, :), 'filled');
+            legendEntries{end+1} = ['Cluster ' num2str(i)];
+        end
+        outlierIdx = (clusterID <= 0);
+        if any(outlierIdx)
+            scatter(pcPoints(outlierIdx, 1), pcPoints(outlierIdx, 2), pointSizes(outlierIdx), [0.5 0.5 0.5], 'filled');
+            legendEntries{end+1} = 'Outliers';
+        end
+    else
+        % 统一用红色绘制
+        scatter(pcPoints(:, 1), pcPoints(:, 2), pointSizes, 'r', 'filled');
+        legendEntries = {'Raw Points'};
+    end
+else
+    % --- 如果没有点云数据，打印信息 ---
+    disp('当前帧未检测到2D点云，生成空白图。');
+end
+
+%% 4. 无论有无点云，都绘制雷达图标和美化图像
+plot(0, 0, 'kv', 'MarkerSize', 12, 'MarkerFaceColor', 'k');
+legendEntries{end + 1} = 'Radar';
+
+hold off;
+grid on;
+axis equal; 
+xlabel('X (m)');
+ylabel('Y (m)');
+title('2D Top-Down View (from Range-Azimuth Data)');
+
+% 只有在有图例条目时才显示图例
+if ~isempty(legendEntries)
+    legend(legendEntries, 'Location', 'best');
+end
+
+if ~isempty(limitX); xlim(limitX); end
+if ~isempty(limitY); ylim(limitY); end
+
+drawnow;
+disp('2D俯视点云图已生成！');
+
+end
