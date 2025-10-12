@@ -18,7 +18,7 @@ binFileNameSlave3 = 'slave3_0000_data.bin';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\1user';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\2user';
 %% 雷达读取数据的文件夹路径
-binFilePath = 'E:\20250801meeting\data\20250919\ping';
+binFilePath = 'E:\20250801meeting\data\20250919\10';
 binFileHandleMaster = [binFilePath, '\', binFileNameMaster];
 binFileHandleSlave3 = [binFilePath, '\', binFileNameSlave3];
 binFileHandles = [binFileHandleMaster; binFileHandleSlave3];
@@ -26,7 +26,7 @@ binFileHandles = [binFileHandleMaster; binFileHandleSlave3];
 %% 使能天线
 %% 表示雷达架设在距离地面1.15米的位置
 %% posRadar 的高度值需要根据你实验时的实际架设高度来修改，这会直接影响目标高度的解算是否准确
-posRadar = [0, 0, 0.68]; % 雷达位置. 目前仅高度设置有用, 不要修改x和y. 雷达朝向为y轴正向
+posRadar = [0, 0, 0.376]; % 雷达位置. 目前仅高度设置有用, 不要修改x和y. 雷达朝向为y轴正向
 % 原1.15
 
 fSpacing = 77e9;           % 天线阵列排布所依据的频率
@@ -114,6 +114,19 @@ cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
 cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
 cfarParamRA.pfa = 0.01;
 cfarParamRA.extraTh = 3.5e3;
+
+%% Range-Azimuth CFAR参数设置（方位角CFAR）
+%{
+cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
+cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
+cfarParamRA.pfa = 0.1;
+cfarParamRA.extraTh = 0;
+%}
+%% 2025.10.12 修改方位角CFAR来让生成的2D点云图更加明显
+cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
+cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
+cfarParamRA.pfa = 0.05;
+cfarParamRA.extraTh = 0;
 
 % 在save语句前添加
 disp('当前数据文件路径：');
