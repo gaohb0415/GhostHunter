@@ -18,7 +18,7 @@ binFileNameSlave3 = 'slave3_0000_data.bin';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\1user';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\2user';
 %% 雷达读取数据的文件夹路径
-binFilePath = 'E:\20250801meeting\data\20250919\10';
+binFilePath = 'E:\20250801meeting\data\20251013\36';
 binFileHandleMaster = [binFilePath, '\', binFileNameMaster];
 binFileHandleSlave3 = [binFilePath, '\', binFileNameSlave3];
 binFileHandles = [binFileHandleMaster; binFileHandleSlave3];
@@ -112,20 +112,13 @@ cfarParamRD.extraTh = 0;
 %% Range-Azimuth CFAR参数设置（方位角CFAR）
 cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
 cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
-cfarParamRA.pfa = 0.01;
-cfarParamRA.extraTh = 3.5e3;
-
-%% Range-Azimuth CFAR参数设置（方位角CFAR）
-%{
-cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
-cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
-cfarParamRA.pfa = 0.1;
+cfarParamRA.pfa = 0.25;
 cfarParamRA.extraTh = 0;
-%}
+
 %% 2025.10.12 修改方位角CFAR来让生成的2D点云图更加明显
-cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
-cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
-cfarParamRA.pfa = 0.05;
+cfarParamRA.train = [8, 4]; % 单边 [距离,  角度]
+cfarParamRA.guard = [4, 2]; % 单边 [距离,  角度]
+cfarParamRA.pfa = 0.25;
 cfarParamRA.extraTh = 0;
 
 % 在save语句前添加
