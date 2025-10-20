@@ -36,11 +36,16 @@ function [pwRA, pcRA] = dbfProc1D(radarData, varargin)
 
 
 %% 对于这个dbfProc1D函数，需要调整的参数就是下面三个方面：
+
 %% 1. 图像的清晰度（分辨率）
+
 %% 2. 目标检测的准确性（CFAR）
+
 %% 3. 处理的效率（范围限定）
+
 %% 默认参数
-%% 雷达图像模糊、无法情绪分辨目标，可以尝试减少角度分辨率resAng
+%% 雷达图像模糊、无法清楚分辨目标，可以尝试减少角度分辨率resAng
+
 %% 雷达处理速度很慢（只关心特定区域的图像）更改limitR距离范围和limitAng角度范围
 p = inputParser();         % 配置函数"开关"
 p.CaseSensitive = false;
@@ -69,6 +74,7 @@ logEn = p.Results.logEn;
 
 % 参数优先级: velocityEn > sigReconsEn > pcEn
 % 测速这个高级功能必须以信号重构为前提
+
 if velocityEn; sigReconsEn = 1; end
 if sigReconsEn; pcEn = 1; end
 
@@ -120,13 +126,15 @@ pwRA = pwRA'; % 将维度转换为为[Range, Angle]，这就是最终的距离-�
 
 %% 点云生成（2D-CFAR）
 %% 将上面的 距离-角度 热力图中的离散的、有意义的目标点的信息打包成一个结构化的数据"点云"
-%% pcRA：最终处理结果的存放地点（空的点云结构体）
+%% pcRA：点云的存放地点（空的点云结构体）
 pcRA = struct('iRange', [], 'iAngle', [], 'range', [], 'angle', [], 'x', [], 'y', [], 'velocity', [], 'power', [], 'signal', []);
 if pcEn
     % 2D CFAR
     % 将config.mat中雷达的数据写入到cfarParamRA中
 
     load('config.mat', 'cfarParamRA')
+
+   
     if ~isempty(cfarPfa); cfarParamRA.pfa = cfarPfa; end % 优先采用调用函数时设置的PFA
     [pcRA.iRange, pcRA.iAngle, ~] = cfar2D(pwRA, cfarParamRA); % 执行CFAR
     if isempty(pcRA.iRange); warning('未检测到RA点云'); end

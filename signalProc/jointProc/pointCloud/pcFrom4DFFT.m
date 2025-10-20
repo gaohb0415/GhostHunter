@@ -44,12 +44,23 @@ nPeakAz = p.Results.nPeakAz;
 nPeakEl = p.Results.nPeakEl;
 drawEn = p.Results.drawEn;
 
-%% Range FFT
+
+% 雷达的原始数据是四位数据： 距离  速度  接收天线   发射天线
+% 直接暴力生成所有维度的FFT会生成海量数据，算力不够
+% 此处的策略为：
+% 1. 现在Range-FFT二维平面上，通过CFAR等方法找到少数有意义的"候选点"
+% 2. 只针对这些候选点来计算角度信息（水平 + 俯仰）
+% 大量节省计算资源
+
+%% Range FFT：这是FFT中生成2D点云，找出所有的潜在目标点
 [fftRsltRg, ~] = fftRange(radarData);
 
 %% 雷达参数
+%% 距离分辨率、速度分辨率、天线间距校准因子、雷达自身在坐标系中位置
 load('config.mat', 'resR', 'resV', 'spacingCal', 'posRadar')
 nRg = size(fftRsltRg, 1);
+
+% 转换到真实距离向量
 rg = resR * (0 : nRg - 1)'; % 总距离刻度
 
 %% 提取所选距离范围内的数据
@@ -60,7 +71,7 @@ if any(limitR)
     fftRsltRg = fftRsltRg(iAoiRg, :, :, :);
 end
 
-%% 计算坐标轴
+%% 计算坐标轴和角度坐标轴
 % 速度
 nChirp = size(fftRsltRg, 2);
 vel = resV * (-nChirp / 2 : nChirp / 2 - 1)'; % nChirp为偶数时, 以第 nChirp/2+1个点为0
@@ -73,17 +84,25 @@ el = asind((0 : nEl - 1) / (nEl / 2) - 1); % 俯仰角
 el = ([el(2 : end), 90] + el) / 2; % 以每个angle bin的中心作为其刻度
 el = el' / spacingCal; % 天线间距校准
 
-%% Doppler FFT
+%% Doppler FFT：将数据从 距离-时间 转换到 距离-速度
 [fftRsltRD, pcRD] = fftDoppler(fftRsltRg, 'pcEn', 1);
 
+
 %% 对fftResultRD进行提取与重组
+% 根据从fftDoppler中找到的候选名单pcRD，将所有候选点从完整的天线信号中分离出来
+% 数据降维思想
 sizeRD = size(fftRsltRD);
 nPc = length(pcRD.iRange); % RD点云的数量
 % RD矩阵->RD向量, 注意第一维保留. 该操作是为了将提取的RD点云信号输入到virtualArray2D函数中
 fftRsltRD = reshape(fftRsltRD, [1, sizeRD(1) * sizeRD(2), sizeRD(3 : end)]);
+
+% pcRDSig：只包含了pcRD列表中那些候选点的信号，但是保留了这些点在所有天线上的完整信息
+% 为下一步virtualArray2D和角度FFT做好了准备
 pcRDSig = fftRsltRD(1, sub2ind(sizeRD([1, 2]), pcRD.iRange, pcRD.iVelocity), :, :, :); % 提取RD点云信号
 
+
 %% 生成虚拟阵列
+% 零散的物理天线信号 → 拼装好的信号体 → 一个维度清晰、可以直接进行二维FFT的信号矩阵 [Elevation, Azimuth, Point]
 antArray = virtualArray2D(pcRDSig, 'FFT');
 antArray.signal = permute(antArray.signal, [4, 3, 2, 1]); % 删除刚才保留的第一维, 并将维度转换为[Elevation, Azimuth, RD]
 
