@@ -10,32 +10,28 @@ addpath(genpath(pwd))
 config2243          % 载入雷达相关配置，并且载入雷达采集到的信号文件位置
 
 %% 读取数据
-iFrm = 46;
+iFrm = 60;
 radarData= readBin(iFrm, 0); % 提取某帧，获得的radarData数据就是后面所有数据处理的起点
 
 % ========================================================================
 %           定义并模拟来自LiDAR的先验信息 (ROI)
 % ========================================================================
-% 假设LiDAR模块告诉我们，"鬼探头"最可能发生在车头左前方
-% 距离雷达 2.5米 到 3.5米，角度在 -30度 到 -10度 的区域内。
 disp('--- 启用基于ROI的增强处理 ---');
 roi.range = [0, 8]; % 单位: 米
 roi.angle = [-90, +90];    % 单位: 度
 fprintf('ROI范围: 距离 [%.1f, %.1f] m, 角度 [%d, %d] deg\n', ...
         roi.range(1), roi.range(2), roi.angle(1), roi.angle(2));
-% ========================================================================
 
 % =======================【场景化真值】=======================
 disp('--- 加载场景化真值 (Ground Truth) ---');
 
 % --- 遮挡车辆的边界框 (红框) ---
-% 注意：为了画一个闭合的矩形，我们需要5个点（最后一个点和第一个点重合）
-ground_truth.car.x = [ 1.0, 2.5, 2.5, 1.0, 1.0];
-ground_truth.car.y = [ 2.0, 2.0, 4.5, 4.5, 2.0];
+ground_truth.car.x = [ 1.6, 3.6, 3.6, 1.6, 1.6];
+ground_truth.car.y = [ 1.2, 1.2, 4.2, 4.2, 1.2];
 
 % --- 同学行走的路径 (红色虚线段) ---
-ground_truth.path.x = [ 1.0, 2.5];
-ground_truth.path.y = [ 4.75, 4.75];
+ground_truth.path.x = [ 0, 0];
+ground_truth.path.y = [ 5.7, 2.85];
 % ====================================================================
 
 %% 基本信号处理
@@ -53,7 +49,7 @@ ground_truth.path.y = [ 4.75, 4.75];
 % [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', [0, 8], 'resAng', 1, 'drawEn', 1); % 1D DBF，画出的是物体的极坐标雷达图
 
 % pcRA 角度、强度点云
-[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range, 'limitAng', roi.angle, 'resAng', 0.05, 'drawEn', 1,'cfarPfa',0.25);
+[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range, 'limitAng', roi.angle, 'resAng', 0.05, 'drawEn', 0,'cfarPfa',0.1);
 % [pwRAE, heatmapAE] = dbfProc2D(fftRsltRg, 'limitR', [2, 4], 'limitAz', [-30, 30], 'limitEl', [-30, 20], 'resAz', 0.25, 'resEl', 0.25); % 2D DBF
 % [fftRsltAng1D, pcRA] = fftAngle1D(fftRsltRg, 'limitR', [0, 8], 'pcEn', 0, 'drawEn', 1); % 1D Angle FFT
 % [fftRsltAng2D, heatmapAE] = fftAngle2D(fftRsltRg, 'limitR', [3.8, 4.6], 'drawEn', 1); % 2D Angle FFT
@@ -61,10 +57,8 @@ ground_truth.path.y = [ 4.75, 4.75];
 %% 整合信号处理
 % 点云生成
 
-
-
 % ========================================================================
-%           2D俯视图生成模块 (适配V1.0绘图函数的版本)
+%           2D俯视图生成模块
 % ========================================================================
 
 figure(5); % 1. 明确操作5号窗口
@@ -79,7 +73,7 @@ plot(ground_truth.path.x, ground_truth.path.y, 'r--', 'LineWidth', 2);
 % --- 步骤 B: 在真值背景上，调用V1.0版本的绘图函数 ---
 % (确保 pcRA 和 roi 变量已经存在)
 if exist('pcRA', 'var') && ~isempty(pcRA.x)
-    clusterRslt2D = pcCluster2D([pcRA.x, pcRA.y], 'pw', pcRA.power, 'drawEn', 0);
+    clusterRslt2D = pcCluster2D([pcRA.x, pcRA.y], 'pw', pcRA.power, 'drawEn', 0,'minpts',1);
     
     % [核心修改] 调用函数时不接收任何输出
     drawPointsOnExistingAxes(clusterRslt2D.pcInput, ...
