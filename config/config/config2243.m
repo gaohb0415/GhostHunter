@@ -10,50 +10,36 @@ device = '2243';
 %% 阵列类型
 % 'all'为4芯片, 'half'为2芯片(master + slave3)
 arrayType = 'half';
-% 这里的芯片使用的是master与slave3号芯片，级联模式
 
 %% 雷达数据路径
 binFileNameMaster = 'master_0000_data.bin';
 binFileNameSlave3 = 'slave3_0000_data.bin';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\1user';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\2user';
-%% 雷达读取数据的文件夹路径
-binFilePath = 'E:\20250801meeting\data\20251013\36';
+binFilePath = 'E:\20250801meeting\data\20251018\pingfang';
 binFileHandleMaster = [binFilePath, '\', binFileNameMaster];
 binFileHandleSlave3 = [binFilePath, '\', binFileNameSlave3];
 binFileHandles = [binFileHandleMaster; binFileHandleSlave3];
 
 %% 使能天线
-%% 表示雷达架设在距离地面1.15米的位置
-%% posRadar 的高度值需要根据你实验时的实际架设高度来修改，这会直接影响目标高度的解算是否准确
-posRadar = [0, 0, 0.376]; % 雷达位置. 目前仅高度设置有用, 不要修改x和y. 雷达朝向为y轴正向
-% 原1.15
-
+posRadar = [0, 0, 1.15]; % 雷达位置. 目前仅高度设置有用, 不要修改x和y. 雷达朝向为y轴正向
 fSpacing = 77e9;           % 天线阵列排布所依据的频率
 nTx = 6;                         % 发射天线个数
 nRx = 8;                         % 接收天线个数
 
-
 %% 采样参数
-fStart = 77e9;            % 起始频率 77GHz
-nAdc1Chirp = 512;    % 一个chirp的ADC采样次数
+fStart = 77e9;            % 起始频率
+nAdc1Chirp = 256;    % 一个chirp的ADC采样次数
 adcRate = 7.04e6;     % ADC采样频率
-nChirp1Frm = 256;    % 一帧中各Tx发射的chrip的个数
-
-% Chirp的调频斜率 (Hz/s)。这是一个极其重要的参数，它和采样率共同决定了最大探测距离
-s = 120e12; 
-
+nChirp1Frm = 128;    % 一帧中各Tx发射的chrip的个数
+s = 99e12;                 % 斜率 Hz/s
 tIdle = 10e-6;            % chirp间的空闲时间
 tAdcStart = 3e-6;      % 开始升频但还未采样的时间
 tRampEnd = 40e-6;  % 整个扫频时间
 tTxStart = 1e-6;         % Tx启动时间
-tFrm = 100e-3;            % 帧周期,每隔100毫秒就采集一帧的数据，雷达刷新率为10Hz(1/0.1s)
-
-
+tFrm = 50e-3;            % 帧周期
 
 %% 计算参数
-%% 这部分计算代码不是用来更改的，是通过采集完的数据发现了问题之后
-%% 通过以下衍生参数的异常反推上面采样参数的异常的，然后更改上面的采样参数
 c = physconst('LightSpeed');       % 光速
 lambda = c / fStart;                     % 波长
 bw = nAdc1Chirp / adcRate * s;  % 有效带宽
@@ -66,8 +52,6 @@ tChirpIntvl = tChirp * nTx;           % 每个Tx发射两个chirp的间隔(即ch
 tChirp1Frm = tChirpIntvl * nChirp1Frm; % 一帧中的总chirp时长 
 data1Frm = nTx * nRx * nAdc1Chirp * nChirp1Frm * 2 * 2 / 1024 / 1024; % 每帧数据量 MB
 nFrm1File = floor(2047 / data1Frm * 2); % 一个文件能容纳的最大帧数 *2指启用2芯片
-
-
 % 计算帧数
 nFrm = 0;
 handleTemp = binFileHandleMaster;
@@ -86,44 +70,23 @@ resR = c / (2 * bw);                         % 距离分辨率
 maxV = lambda / (4 * tChirpIntvl); % 最大探测速度 m/s
 resV = lambda / (2 * tChirp1Frm); % 速度分辨率 m/s
 
-
-
-%% Range CFAR参数设置（距离）
-%% CFAR：从背景噪声中准确地找出目标信号（动态、智能阈值）
-cfarParamRg.train = 8;      % 单边 训练单元数量，用来估计噪声水平
-cfarParamRg.guard = 4;    % 单边 保护单元数量，防止目标信号本身泄露到训练单元中
-
-% 虚警概率 (Probability of False Alarm)，即把噪声误判为目标的概率。
-% 这个值设得越低，检测门限就越高，越不容易产生误报，但可能会漏掉一些弱小的目标
+%% Range CFAR参数设置
+cfarParamRg.train = 8;      % 单边
+cfarParamRg.guard = 4;    % 单边
 cfarParamRg.pfa = 0.25;
 cfarParamRg.extraTh = 0; % 额外阈值
 
-% 漏报很多：调高pfa、减少extraTh
-% 误报很多：降低pfa、增大extraTh
-% train和guard的大小也需要根据目标大小的密集程度来进行调整
-
-
-%% Range-Doppler CFAR参数设置（距离多普勒）
+%% Range-Doppler CFAR参数设置
 cfarParamRD.train = [8, 4];   % 单边 [距离,  速度]
 cfarParamRD.guard = [8, 4]; % 单边 [距离,  速度]
-cfarParamRD.pfa = 0.005;
+cfarParamRD.pfa = 0.01;
 cfarParamRD.extraTh = 0;
 
-%% Range-Azimuth CFAR参数设置（方位角CFAR）
+%% Range-Azimuth CFAR参数设置
 cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
 cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
-cfarParamRA.pfa = 0.25;
-cfarParamRA.extraTh = 0;
-
-%% 2025.10.12 修改方位角CFAR来让生成的2D点云图更加明显
-cfarParamRA.train = [8, 4]; % 单边 [距离,  角度]
-cfarParamRA.guard = [4, 2]; % 单边 [距离,  角度]
-cfarParamRA.pfa = 0.25;
-cfarParamRA.extraTh = 0;
-
-% 在save语句前添加
-disp('当前数据文件路径：');
-disp(binFileHandles);  % 打印主从芯片数据文件路径
+cfarParamRA.pfa = 0.01;
+cfarParamRA.extraTh = 3.5e3;
 
 %% 保存配置
 save .\config\config\config.mat
