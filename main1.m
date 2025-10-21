@@ -37,11 +37,11 @@ ground_truth.path.y = [ 5.7, 5.7];
 
 % --- 图像生成开关 ---
 % 你想看哪个图，就把它设为 true, 不想看就设为 false
-cfg.showRangeFFT    = false;
+cfg.showRangeFFT    = true;
 cfg.showRangeAngle  = false;
 cfg.show3DPointCloud= false;
 cfg.showClusteredPC = false;
-cfg.show2DTopDown   = true;    % 是否显示我们创建的2D俯视点云图
+cfg.show2DTopDown   = false;    % 是否显示我们创建的2D俯视点云图
 
 %% =================== 2. 载入雷达配置 ===================
 config2243;
@@ -84,19 +84,51 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
     end
 
     if cfg.showRangeFFT
-        figure(1); % 激活或创建1号窗口
-        clf;       % 清空当前窗口
-        fftRange(radarData, 'pcEn', 0, 'drawEn', 1);
+        % figure(1); % 激活或创建1号窗口
+        % clf;       % 清空当前窗口
+
+        [fftRsltRg, pcRg] = fftRange(radarData, 'pcEn', 1, 'drawEn', 0);
+
+        fftPower = matExtract(abs(fftRsltRg), 1, [0, 0, 0, 0]);
+        load('config.mat', 'cfarParamRg');
+        cfarParamRg.method = 'OS';
+        cfarParamRg.rank = 12;
+        [~, cfarTh] = cfar1D(fftPower, cfarParamRg);
+        
+        pcIdx = pcRg.iRange;
+
+        figure(1); % 锚定1号窗口
+        ax = gca;
+
+        drawRangeFFTnew(fftPower, ...
+                 'pcIdx', pcIdx, ...
+                 'cfarTh', cfarTh, ...
+                 'logEn', 1, ...
+                 'ax', ax);
+       
         title(['距离-FFT (帧: ', num2str(iFrm), ')']);
     end
 
     if cfg.showRangeAngle
 
-        % figure(2); % 激活或创建2号窗口
-        % clf;
         % hold on;
 
-        [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range,'limitAng',roi.angle, 'resAng', 0.2, 'drawEn', 1,'cfarPfa',0.1);
+        [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range,'limitAng',roi.angle, 'resAng', 0.2, 'drawEn', 0,'cfarPfa',0.1);
+        
+        load('config.mat', 'resR', 'spacingCal', 'resV');
+        resAng_param = 0.2; % 确保这个值与上面 'resAng' 的输入值完全相同
+        ang = (roi.angle(1) : resAng_param : roi.angle(2))';
+        nRg_total = size(fftRsltRg, 1);       % 获取距离FFT后的总点数
+        rg_total = resR * (0 : nRg_total - 1)'; % 计算完整的距离刻度
+        valid_indices = rg_total >= roi.range(1) & rg_total <= roi.range(2);
+        rg = rg_total(valid_indices);
+
+        figure(2); % 激活或创建2号窗口
+        
+        ax = gca;
+
+        drawRAMnew(pwRA, rg, ang, 'pcRA', pcRA, 'logEn', 0, 'ax', ax);
+        
         title(['距离-角度 热力图 (帧: ', num2str(iFrm), ')']);
 
     end
