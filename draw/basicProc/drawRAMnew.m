@@ -47,7 +47,7 @@ end
 fig = ax.Parent;
 
 %% 3. 绘图
-fontSize = 16;
+fontSize = 8;
 
 % 使用 cla(ax) 清空目标坐标系，而不是clf清空整个窗口
 cla(ax, 'reset');
