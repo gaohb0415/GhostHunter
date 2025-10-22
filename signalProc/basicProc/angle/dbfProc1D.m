@@ -119,8 +119,10 @@ for iRg = 1 : nRg
     [pwRA(iBinRA), ~] = dbf(ang, [], antArray.signal(:, :, iRg), antArray.arrayPos, [], 'spacingCal', spacingCal);
 end
 % 注意下面的维度顺序
+
 % 波束扫描之后，将pwRA这个单一长向量，重新组织成一个二维矩阵[nAng, nRg]
 pwRA = reshape(pwRA, [nAng, nRg]);
+
 % 行代表距离Range，列代表角度Angle
 pwRA = pwRA'; % 将维度转换为为[Range, Angle]，这就是最终的距离-角度图矩阵（热力图）
 
@@ -228,10 +230,7 @@ if drawEn
     % 设置颜色映射表
     colormap('jet'); % 'jet' 是一个常用的颜色表(蓝->红), 'coolwarm' 也是很好的选择
     
-    % 添加颜色条 (Colorbar)，并给它加上标签
-    h = colorbar;
-    ylabel(h, '速度 (m/s)'); % 解释颜色代表的物理意义和单位
-
+   
     % (可选，但推荐) 固定颜色条的范围，使多次绘图具有可比性
     % 比如，如果你知道最大速度不会超过5m/s，可以这样设置：
     % maxVel = 5;

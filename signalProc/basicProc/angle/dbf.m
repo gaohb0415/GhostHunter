@@ -26,8 +26,10 @@ p = inputParser();
 p.CaseSensitive = false;
 p.addOptional('spacingCal', 1);
 p.addOptional('pwAlgo', 'Capon'); 
+
 %% 追求高刷新率场景的话（处理速度⬆）p.addOptional('pwAlgo', 'CBF'); 
 %% 功率DoA算法更换为CBF
+%% 目前对于wtAlgo功率不进行修改了，单一移动目标使用CBF处理就够快了
 p.addOptional('wtAlgo', 'CBF');
 p.addOptional('pwEn', 1);
 p.addOptional('sigReconsEn', 0);
