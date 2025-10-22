@@ -19,29 +19,34 @@ disp('--- 启用基于ROI的增强处理 ---');
 roi.range = [0, 8]; % 单位: 米
 roi.angle = [-90, +90];    % 单位: 度
 
+radar_yaw_angle_deg = 15; %向左为正
+
+% 真值车辆
+ground_truth_world.car.x = [ 1.6, 3.6, 3.6, 1.6, 1.6];
+ground_truth_world.car.y = [ 1.2, 1.2, 4.2, 4.2, 1.2];
+% 行人路径
+ground_truth_world.path.x = [ 3.6, 0];
+ground_truth_world.path.y = [ 5.7, 5.7];
+
+% --- 图像生成开关 ---
+% 你想看哪个图，就把它设为 true, 不想看就设为 false
+cfg.showRangeFFT    = false;
+cfg.showRangeAngle  = false;
+cfg.show3DPointCloud= false;
+cfg.showClusteredPC = false;
+cfg.show2DTopDown   = true; 
 
 % =======================【场景化真值】=======================
 disp('--- 加载场景化真值 (Ground Truth) ---');
 
 % --- 遮挡车辆的边界框 (红框) ---
-% 注意：为了画一个闭合的矩形，我们需要5个点（最后一个点和第一个点重合）
-ground_truth.car.x = [ 1.6, 3.6, 3.6, 1.6, 1.6];
-ground_truth.car.y = [ 1.2, 1.2, 4.2, 4.2, 1.2];
-
+% 注意：为了画一个闭合的矩形，我们需要5个点（最后一个点和第一个点重合
 % --- 同学行走的路径 (红色虚线段) ---
-ground_truth.path.x = [ 3.6, 0];
-ground_truth.path.y = [ 5.7, 5.7];
 % ====================================================================
 
+fprintf('雷达水平旋转角度: %d deg\n', radar_yaw_angle_deg);
 
-
-% --- 图像生成开关 ---
-% 你想看哪个图，就把它设为 true, 不想看就设为 false
-cfg.showRangeFFT    = true;
-cfg.showRangeAngle  = false;
-cfg.show3DPointCloud= false;
-cfg.showClusteredPC = false;
-cfg.show2DTopDown   = false;    % 是否显示我们创建的2D俯视点云图
+rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angle_deg);   
 
 %% =================== 2. 载入雷达配置 ===================
 config2243;
@@ -56,8 +61,6 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         fprintf('读取第 %d 帧失败，可能已到达文件末尾。播放结束。\n', iFrm);
         break;
     end
-
-
 
     % --- 数据预处理 ---
 
@@ -94,7 +97,7 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         cfarParamRg.method = 'OS';
         cfarParamRg.rank = 12;
         [~, cfarTh] = cfar1D(fftPower, cfarParamRg);
-        
+
         pcIdx = pcRg.iRange;
 
         figure(1); % 锚定1号窗口
@@ -129,7 +132,7 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
 
         drawRAMnew(pwRA, rg, ang, 'pcRA', pcRA, 'logEn', 0, 'ax', ax);
         
-        title(['距离-角度 热力图 (帧: ', num2str(iFrm), ')']);
+        title(['距离-角度 热力图 (帧: ', num2str(iFrm), ')'],'FontSize',10);
 
     end
 
@@ -162,9 +165,9 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
 
         % --- 步骤 1: 绘制真值作为背景 ---
         % 绘制红色的车辆边界框
-        plot(ground_truth.car.x, ground_truth.car.y, 'r-', 'LineWidth', 2);
+        h_car = plot(rotated_ground_truth.car.x, rotated_ground_truth.car.y, 'r-', 'LineWidth', 2);
         % 绘制红色的虚线路径
-        plot(ground_truth.path.x, ground_truth.path.y, 'r--', 'LineWidth', 2);
+        h_path = plot(rotated_ground_truth.path.x, rotated_ground_truth.path.y, 'r--', 'LineWidth', 2);
 
         % --- 步骤 2: 在真值背景上，绘制雷达检测到的点云 ---
         if exist('pcRA', 'var') && ~isempty(pcRA.x)
@@ -187,7 +190,7 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         ylim([0, 8]);
         xlabel('X (m)');
         ylabel('Y (m)');
-        legend('车辆边界', '行人路径', 'ROI', '检测点', '雷达'); % 你可以根据实际情况调整图例
+       
         title(['二维俯视点云图 (帧: ', num2str(iFrm), ')']);
     end
     % =========================================================================
