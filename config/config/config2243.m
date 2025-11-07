@@ -16,13 +16,13 @@ binFileNameMaster = 'master_0000_data.bin';
 binFileNameSlave3 = 'slave3_0000_data.bin';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\1user';
 % binFilePath = 'C:\Users\liuha\Desktop\20250801meeting\data\2user';
-binFilePath = 'E:\20250801meeting\data\20251018\pingfang';
+binFilePath = 'E:\20250801meeting\data\20251023\20shangfangb2ci';
 binFileHandleMaster = [binFilePath, '\', binFileNameMaster];
 binFileHandleSlave3 = [binFilePath, '\', binFileNameSlave3];
 binFileHandles = [binFileHandleMaster; binFileHandleSlave3];
 
 %% 使能天线
-posRadar = [0, 0, 1.15]; % 雷达位置. 目前仅高度设置有用, 不要修改x和y. 雷达朝向为y轴正向
+posRadar = [0, 0, 0.375]; % 雷达位置. 目前仅高度设置有用, 不要修改x和y. 雷达朝向为y轴正向
 fSpacing = 77e9;           % 天线阵列排布所依据的频率
 nTx = 6;                         % 发射天线个数
 nRx = 8;                         % 接收天线个数
@@ -85,7 +85,7 @@ cfarParamRD.extraTh = 0;
 %% Range-Azimuth CFAR参数设置
 cfarParamRA.train = [12, 6]; % 单边 [距离,  角度]
 cfarParamRA.guard = [8, 4]; % 单边 [距离,  角度]
-cfarParamRA.pfa = 0.01;
+cfarParamRA.pfa = 0.36; % 虚警率：越小越严格，越大越
 cfarParamRA.extraTh = 3.5e3;
 
 %% 保存配置
