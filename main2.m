@@ -10,18 +10,18 @@ addpath(genpath(pwd))
 config2243          % 载入雷达相关配置，并且载入雷达采集到的信号文件位置
 
 %% 读取数据
-iFrm = 36;
+iFrm = 1;
 radarData= readBin(iFrm, 0); % 提取某帧，获得的radarData数据就是后面所有数据处理的起点
 
 
-cfg.showRangeFFT        = 1;   % 是否显示 距离-FFT 图
+cfg.showRangeFFT        = 0;   % 是否显示 距离-FFT 图
 cfg.showRangeDoppler    = 0;   % 是否显示 距离-多普勒 图
 cfg.showRangeAngle      = 1;   % 是否显示 距离-角度 热力图
 cfg.show2DTopDown       = 1;   % 是否显示 2D俯视图 (含真值)
 cfg.show3DPointCloud    = 0;   % 是否显示 3D点云 图
 cfg.show3DClusteredPC   = 0;   % 是否显示 3D点云聚类 图
 
-radar_yaw_angle_deg = 0;  % 雷达旋转角度控制
+radar_yaw_angle_deg = -30;  % 雷达旋转角度控制
 
 % ROI设置
 roi.range = [0, 8];        % 单位: 米
@@ -29,11 +29,11 @@ roi.angle = [-90, +90];    % 单位: 度
 
 % 场景化真值设置
 % 车辆
-ground_truth_world.car.x = [ 1.6, 3.6, 3.6, 1.6, 1.6];
-ground_truth_world.car.y = [ 1.2, 1.2, 4.2, 4.2, 1.2];
+ground_truth_world.car.x = [ 1.65, 3.44, 3.44, 1.65, 1.65];
+ground_truth_world.car.y = [ 0.63, 0.63, 3.48, 3.48, 0.63];
 % 行人路径
-ground_truth_world.path.x = [ 3.6, 0];
-ground_truth_world.path.y = [ 5.7, 5.7];
+ground_truth_world.path.x = [ 4.44, 0];
+ground_truth_world.path.y = [ 4.98, 4.98];
 
 
 %           定义并模拟来自LiDAR的先验信息 (ROI)
@@ -71,7 +71,7 @@ rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angl
 % [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', [0, 8], 'resAng', 1, 'drawEn', 1); % 1D DBF，画出的是物体的极坐标雷达图
 
 % pcRA 角度、强度点云
-[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range, 'limitAng', roi.angle, 'resAng', 0.05, 'drawEn', cfg.showRangeAngle,'cfarPfa',0.1);
+[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range, 'limitAng', roi.angle, 'resAng', 0.05, 'drawEn', cfg.showRangeAngle);
 % [pwRAE, heatmapAE] = dbfProc2D(fftRsltRg, 'limitR', [2, 4], 'limitAz', [-30, 30], 'limitEl', [-30, 20], 'resAz', 0.25, 'resEl', 0.25); % 2D DBF
 % [fftRsltAng1D, pcRA] = fftAngle1D(fftRsltRg, 'limitR', [0, 8], 'pcEn', 0, 'drawEn', 1); % 1D Angle FFT
 % [fftRsltAng2D, heatmapAE] = fftAngle2D(fftRsltRg, 'limitR', [3.8, 4.6], 'drawEn', 1); % 2D Angle FFT
@@ -92,7 +92,7 @@ pc3D = pcFrom4DFFT(radarData, 'limitR', [0.8, 7.2], 'limitX', [-3, 3], 'limitY',
 % pc3D = pcFrom2PassDBF(radarData, 'limitR', [0.8, 7.2], 'limitX', [-3, 3], 'limitY', [1.2, 6.8], 'limitZ', [0, 2], 'nPeakEl', 1, 'drawEn', 1); % 2-Pass DBF
 
 % 点云聚类
-% clusterXY = pcCluster2D([pcRA.x, pcRA.y], 'pw', [], 'limitXV', [-3.2, 3.2], 'limitY', [1.6, 6.4], 'drawEn', 1); % XY点云聚类
+clusterXY = pcCluster2D([pcRA.x, pcRA.y], 'pw', [], 'limitXV', [-3.2, 3.2], 'limitY', [1.6, 6.4], 'drawEn', 0); % XY点云聚类
 % clusterVY = pcCluster2D([pcRD.velocity, pcRD.range], 'pcType', 'VY', 'pw', [], 'limitY', [1.6, 6.4], 'drawEn', 1); % XV点云聚类
 
 clusterXYZ= pcCluster3D([pc3D.x, pc3D.y, pc3D.z], 'pw', [], 'vel', pc3D.vel, 'limitX', [-3, 3], 'limitY', [1.2, 6.8], 'limitZV', [0, 2], 'drawEn', cfg.show3DClusteredPC); % XYZ点云聚类

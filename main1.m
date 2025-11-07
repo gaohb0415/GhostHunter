@@ -11,27 +11,27 @@ addpath(genpath(pwd));
 % --- 播放控制 ---
 cfg.startFrame = 1;
 cfg.endFrame   = 210;
-cfg.frameStep  = 5;
-cfg.pauseTime  = 0.25;
+cfg.frameStep  = 2;
+cfg.pauseTime  = 0.1;
 
 % 这是我们为“鬼探头”场景设定的感兴趣区域 (Region of Interest)
 disp('--- 启用基于ROI的增强处理 ---');
 roi.range = [0, 8]; % 单位: 米
 roi.angle = [-90, +90];    % 单位: 度
 
-radar_yaw_angle_deg = 15; %向左为正
+radar_yaw_angle_deg = -30; %向左为正
 
 % 真值车辆
-ground_truth_world.car.x = [ 1.6, 3.6, 3.6, 1.6, 1.6];
-ground_truth_world.car.y = [ 1.2, 1.2, 4.2, 4.2, 1.2];
+ground_truth_world.car.x = [ 1.65, 3.44, 3.44, 1.65, 1.65];
+ground_truth_world.car.y = [ 0.63, 0.63, 3.48, 3.48, 0.63];
 % 行人路径
-ground_truth_world.path.x = [ 3.6, 0];
-ground_truth_world.path.y = [ 5.7, 5.7];
+ground_truth_world.path.x = [ 4.44, 0];
+ground_truth_world.path.y = [ 4.98, 4.98];
 
 % --- 图像生成开关 ---
 % 你想看哪个图，就把它设为 true, 不想看就设为 false
 cfg.showRangeFFT    = false;
-cfg.showRangeAngle  = false;
+cfg.showRangeAngle  = true;
 cfg.show3DPointCloud= false;
 cfg.showClusteredPC = false;
 cfg.show2DTopDown   = true; 
@@ -48,9 +48,21 @@ fprintf('雷达水平旋转角度: %d deg\n', radar_yaw_angle_deg);
 
 rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angle_deg);   
 
+% 缓存配置
+cfg.cacheDir = 'pcRA_cache'; % 用于存储 pcRA 结果的文件夹
+
+
 %% =================== 2. 载入雷达配置 ===================
+
 config2243;
 fprintf('雷达配置加载完毕，开始处理数据...\n');
+
+% --- 创建缓存目录 ---
+if ~exist(cfg.cacheDir, 'dir')
+    mkdir(cfg.cacheDir);
+    fprintf('已创建缓存目录: %s\n', cfg.cacheDir);
+end
+
 
 %% =================== 3. 循环处理与可视化 ===================
 for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
@@ -75,16 +87,35 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
     end
 
 
-    %  如果需要2D俯视图，则计算pcRA
-    if cfg.show2DTopDown
 
-        [~, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, ...
-            'limitR', roi.range, ...      % <-- 应用ROI
-            'limitAng', roi.angle, ...      % <-- 应用ROI
-            'resAng', 0.2, ...            % <-- 使用一个较好的分辨率
-            'cfarPfa', 0.1, ...          % <-- 使用为ROI调好的pfa
-            'drawEn', 0);                 % <-- 保持计算和绘图分离
+    % --- 2D俯视点云图，则计算或加载 pcRA（缓存功能） ---
+    if cfg.show2DTopDown
+        % 1. 定义当前帧的缓存文件路径
+        %    使用 sprintf('%04d', iFrm) 确保文件名对齐 (e.g., 0001, 0002, ..., 0210)
+        cacheFile = fullfile(cfg.cacheDir, sprintf('pcRA_frame_%04d.mat', iFrm));
+
+        % 2. 检查缓存是否存在
+        if exist(cacheFile, 'file')
+            % 2a. 缓存命中：直接加载
+            fprintf('  -> 缓存命中，加载: %s\n', cacheFile);
+            load(cacheFile, 'pcRA');
+        else
+            % 2b. 缓存未命中：计算，然后保存
+            fprintf('  -> 缓存未命中，正在计算 pcRA (帧 %d)...\n', iFrm);
+            
+            % [这是原来的计算代码]
+            [~, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, ...
+                'limitR', roi.range, ...      % <-- 应用ROI
+                'limitAng', roi.angle, ...      % <-- 应用ROI
+                'resAng', 0.2, ...            % <-- 使用一个较好的分辨率
+                'drawEn', 0);                 % <-- 保持计算和绘图分离
+
+            % [新增] 保存到缓存
+            save(cacheFile, 'pcRA');
+        end
     end
+    
+
 
     if cfg.showRangeFFT
         % figure(1); % 激活或创建1号窗口
@@ -116,7 +147,7 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
 
         % hold on;
 
-        [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range,'limitAng',roi.angle, 'resAng', 0.2, 'drawEn', 0,'cfarPfa',0.1);
+        [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range,'limitAng',roi.angle, 'resAng', 0.2, 'drawEn', 0);
         
         load('config.mat', 'resR', 'spacingCal', 'resV');
         resAng_param = 0.2; % 确保这个值与上面 'resAng' 的输入值完全相同
