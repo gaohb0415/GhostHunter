@@ -17,7 +17,7 @@ function radarData = readBin(iFrm, iChirp, varargin)
 %% 默认参数
 p = inputParser();                  % 可选参数处理开关
 p.CaseSensitive = false;
-p.addOptional('staticRmvEn', 1);    % 添加一个可选参数staticRmvEn，默认开启静态杂波滤除
+p.addOptional('staticRmvEn', 0);    % 添加一个可选参数staticRmvEn，默认开启静态杂波滤除
 p.addOptional('dataType', 'real');
 p.addOptional('dataInfo', []);
 p.parse(varargin{:});
