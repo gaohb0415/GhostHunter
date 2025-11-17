@@ -55,10 +55,12 @@ ground_truth_world.path.y = [ 8.43, 8.43];
 % --- 图像生成开关 ---
 % 你想看哪个图，就把它设为 true, 不想看就设为 false
 cfg.showRangeFFT    = false;
-cfg.showRangeAngle  = true;
+cfg.showRangeAngle  = false;
 cfg.show3DPointCloud= false;
 cfg.showClusteredPC = false;
 cfg.show2DTopDown   = true; 
+cfg.showRangeDoppler = false;
+
 
 % =======================【场景化真值】=======================
 disp('--- 加载场景化真值 (Ground Truth) ---');
@@ -268,6 +270,62 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
             axis off;
         end
     end
+
+
+
+   % =======================【新增：Range-Doppler (RD) 图】=======================
+    % 策略：调用 fftDoppler 只计算不画图 (drawEn=0)，避免弹出新窗口
+    % 然后在 figure(6) 中手动复现 drawRDM 的绘图逻辑
+    if cfg.showRangeDoppler
+        figure(6); 
+        clf;       % 清空 6 号窗口，确保画面不叠加
+        ax = gca;  % 获取当前句柄
+
+        % --- 1. 纯计算 (禁止内部绘图) ---
+        [fftRsltRD, pcRD] = fftDoppler(fftRsltRg, 'pcEn', 1, 'drawEn', 0);
+
+        % --- 2. 准备绘图数据 ---
+        % 提取能量矩阵 (复现 drawRDM 内部逻辑)
+        pwRD = matExtract(abs(fftRsltRD), [1, 2], [0, 0, 0]); 
+        
+        % 加载分辨率参数
+        load('config.mat', 'resR', 'resV');
+        
+        % 计算坐标轴 (复现 drawRDM 内部逻辑)
+        [nRg_rd, nVel_rd] = size(pwRD);
+        rg_axis  = resR * (0 : nRg_rd - 1);               % 距离轴
+        vel_axis = resV * (-nVel_rd / 2 : nVel_rd / 2 - 1); % 速度轴
+
+        % --- 3. 手动绘图 (完全仿照 drawRDM，但在当前 figure(6) 中画) ---
+        % 绘制热力图
+        imagesc(vel_axis, rg_axis, pwRD, 'CDataMapping', 'scaled');
+        
+        % 绘制点云 (如果有)
+        if ~isempty(pcRD.iRange)
+            hold on;
+            % 注意：pcRD.iVelocity 和 pcRD.iRange 是索引，需转为实际坐标
+            plot(vel_axis(pcRD.iVelocity), rg_axis(pcRD.iRange), '.', 'Color', 'r');
+            hold off;
+        end
+
+        % --- 4. 图像美化 (仿照 drawRDM 设置) ---
+        xlabel('速度 (m/s)', 'fontsize', 12);
+        ylabel('距离 (m)', 'fontsize', 12);
+        title(['距离-多普勒图 (帧: ', num2str(iFrm), ')']);
+        
+        set(gca, 'YDir', 'normal'); % 确保Y轴方向正确（从小到大）
+        set(gca, 'Xlim', [vel_axis(1) - resV/2, vel_axis(end) + resV/2]);
+        set(gca, 'Ylim', [rg_axis(1) - resR/2, rg_axis(end) + resR/2]);
+        set(gca, 'ColorScale', 'log'); % 开启对数显示，看清弱目标
+        
+    end
+    % ============================================================================
+
+
+
+
+
+
 
    % =======================【2D点云俯视图 (代码复用)】=======================
     % 【修改】此模块现在完全复用，它只负责绘制 gt_to_plot

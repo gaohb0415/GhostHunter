@@ -10,7 +10,7 @@ addpath(genpath(pwd))
 config2243          % 载入雷达相关配置，并且载入雷达采集到的信号文件位置
 
 %% 读取数据
-iFrm = 2;
+iFrm = 115;
 radarData= readBin(iFrm, 0); % 提取某帧，获得的radarData数据就是后面所有数据处理的起点
 
 
@@ -81,8 +81,10 @@ rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angl
 
 % 2D点云俯视图生成模块
 
-generate2DTopDownView(5, pcRA, rotated_ground_truth, roi, iFrm);
-drawnow;
+if cfg.show2DTopDown
+    generate2DTopDownView(5, pcRA, rotated_ground_truth, roi, iFrm);
+    drawnow;
+end
 
 % ========================================================================
 
