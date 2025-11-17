@@ -14,19 +14,43 @@ cfg.endFrame   = 210;
 cfg.frameStep  = 2;
 cfg.pauseTime  = 0.1;
 
+
+% =======================【新增：模式控制开关】=======================
+% 在这里选择你的实验模式:
+% true  = 动态模式 (雷达在小推车上移动)
+% false = 静态模式 (雷达固定在原点，模拟静止测量)
+cfg.isDynamicMode = true; % <--- 这是你的总开关！
+% ====================================================================
+
+% =======================【新增：自车(小推车)模拟参数】=======================
+% 只有在 isDynamicMode = true 时才会被使用
+cfg.ego_start_x = 0;      % 假设小推车从世界坐标的X=0处开始
+cfg.ego_start_y = 0;      % 假设小推车从世界坐标的Y=0处开始
+% 【修改】假设小推车以 1.0 米/秒 的速度沿Y轴（雷达朝向）前进
+cfg.ego_velocity_x = 0;   
+cfg.ego_velocity_y = 0.579; 
+% ====================================================================
+
+
+
 % 这是我们为“鬼探头”场景设定的感兴趣区域 (Region of Interest)
 disp('--- 启用基于ROI的增强处理 ---');
 roi.range = [0, 8]; % 单位: 米
 roi.angle = [-90, +90];    % 单位: 度
 
-radar_yaw_angle_deg = -30; %向左为正
+% 【修改】雷达(小推车)的“初始”朝向
+% 无论动态还是静态，这都是雷达安装的初始角度
+cfg.ego_start_yaw_deg = -30; %向左为正
+
 
 % 真值车辆
-ground_truth_world.car.x = [ 1.65, 3.44, 3.44, 1.65, 1.65];
-ground_truth_world.car.y = [ 0.63, 0.63, 3.48, 3.48, 0.63];
+ground_truth_world.car.x = [ 0.82, 2.85, 2.85, 0.82, 0.82];
+ground_truth_world.car.y = [ 4.23, 4.23, 6.93, 6.93, 4.23];
 % 行人路径
-ground_truth_world.path.x = [ 4.44, 0];
-ground_truth_world.path.y = [ 4.98, 4.98];
+ground_truth_world.path.x = [ 2.85, 0];
+ground_truth_world.path.y = [ 8.43, 8.43];
+
+
 
 % --- 图像生成开关 ---
 % 你想看哪个图，就把它设为 true, 不想看就设为 false
@@ -44,9 +68,9 @@ disp('--- 加载场景化真值 (Ground Truth) ---');
 % --- 同学行走的路径 (红色虚线段) ---
 % ====================================================================
 
-fprintf('雷达水平旋转角度: %d deg\n', radar_yaw_angle_deg);
+fprintf('雷达水平旋转角度: %d deg\n', cfg.ego_start_yaw_deg);
+rotated_ground_truth = transform_ground_truth(ground_truth_world, cfg.ego_start_yaw_deg);   
 
-rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angle_deg);   
 
 % 缓存配置
 cfg.cacheDir = 'pcRA_cache'; % 用于存储 pcRA 结果的文件夹
@@ -57,11 +81,24 @@ cfg.cacheDir = 'pcRA_cache'; % 用于存储 pcRA 结果的文件夹
 config2243;
 fprintf('雷达配置加载完毕，开始处理数据...\n');
 
+
+% --- 【新增】 加载 tFrm (帧周期) 以便计算时间 ---
+% tFrm 是由 config2243.m 保存到 config.mat 中的
+try
+    load('config.mat', 'tFrm');
+    fprintf('已加载帧周期: tFrm = %.4f s\n', tFrm);
+catch
+    error('无法从 config.mat 加载 tFrm，请确保 config2243.m 运行正确。');
+end
+
+
+
 % --- 创建缓存目录 ---
 if ~exist(cfg.cacheDir, 'dir')
     mkdir(cfg.cacheDir);
     fprintf('已创建缓存目录: %s\n', cfg.cacheDir);
 end
+
 
 
 %% =================== 3. 循环处理与可视化 ===================
@@ -73,6 +110,50 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         fprintf('读取第 %d 帧失败，可能已到达文件末尾。播放结束。\n', iFrm);
         break;
     end
+
+
+
+    % =======================【新增：动态/静态 真值处理模块】=======================
+    if cfg.isDynamicMode
+        % --- 动态模式 ---
+        % 1. 计算当前时间
+        % (iFrm-1) 是因为第1帧(startFrame)的时间戳是0
+        currentTime = (iFrm - cfg.startFrame) * tFrm; 
+        
+        % 2. 计算小推车在世界坐标系下的【当前位置】
+        % 假设匀速直线运动
+        current_ego_x = cfg.ego_start_x + cfg.ego_velocity_x * currentTime;
+        current_ego_y = cfg.ego_start_y + cfg.ego_velocity_y * currentTime;
+        % 假设小推车朝向不变
+        current_ego_yaw_deg = cfg.ego_start_yaw_deg;
+
+        % 3. 将【世界坐标系】的真值，转换到【小推车当前的第一人称视角】
+        % 我们需要一个临时的结构体来存储这一帧的相对真值
+        gt_to_plot = struct();
+        
+        % 转换车辆
+        [gt_car_x_radar, gt_car_y_radar] = world_to_radar_coords(...
+            ground_truth_world.car.x, ground_truth_world.car.y, ...
+            current_ego_x, current_ego_y, current_ego_yaw_deg);
+        gt_to_plot.car.x = gt_car_x_radar;
+        gt_to_plot.car.y = gt_car_y_radar;
+        
+        % 转换路径
+        [gt_path_x_radar, gt_path_y_radar] = world_to_radar_coords(...
+            ground_truth_world.path.x, ground_truth_world.path.y, ...
+            current_ego_x, current_ego_y, current_ego_yaw_deg);
+        gt_to_plot.path.x = gt_path_x_radar;
+        gt_to_plot.path.y = gt_path_y_radar;
+        
+    else
+        % --- 静态模式 ---
+        % 直接使用在循环外计算好的、旋转一次的固定真值
+        gt_to_plot = rotated_ground_truth;
+    end
+    % ====================================================================
+
+
+
 
     % --- 数据预处理 ---
 
@@ -188,31 +269,34 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         end
     end
 
-    % 2D点云俯视图
+   % =======================【2D点云俯视图 (代码复用)】=======================
+    % 【修改】此模块现在完全复用，它只负责绘制 gt_to_plot
+    % 而 gt_to_plot 变量的内容由上面的【动态/静态 真值处理模块】决定
     if cfg.show2DTopDown
         figure(5); % 激活或创建5号窗口
         clf;       % 清空上一帧的画面
         hold on;   % *** 关键：准备在同一张图上叠加绘制所有元素 ***
 
-        % --- 步骤 1: 绘制真值作为背景 ---
-        % 绘制红色的车辆边界框
-        h_car = plot(rotated_ground_truth.car.x, rotated_ground_truth.car.y, 'r-', 'LineWidth', 2);
-        % 绘制红色的虚线路径
-        h_path = plot(rotated_ground_truth.path.x, rotated_ground_truth.path.y, 'r--', 'LineWidth', 2);
+        % --- 步骤 1: 绘制【当前帧】的真值作为背景 ---
+        % 【修改】
+        % 不再绘制固定的 rotated_ground_truth
+        % 而是绘制我们刚刚在上面 if/else 块中计算出的 gt_to_plot
+        h_car = plot(gt_to_plot.car.x, gt_to_plot.car.y, 'r-', 'LineWidth', 2);
+        h_path = plot(gt_to_plot.path.x, gt_to_plot.path.y, 'r--', 'LineWidth', 2);
 
         % --- 步骤 2: 在真值背景上，绘制雷达检测到的点云 ---
+        % (这部分代码保持不变)
         if exist('pcRA', 'var') && ~isempty(pcRA.x)
             clusterRslt2D = pcCluster2D([pcRA.x, pcRA.y], 'pw', pcRA.power, 'drawEn', 0);
 
-            % [重要] 我们需要稍微修改一下drawPc2DPlus的调用方式
-            % 让它不要自己创建新窗口(figure)和清空(clf)，而是直接画在我们当前的图上
-            drawPointsOnExistingAxes(clusterRslt2D.pcInput, ... % 我们将创建一个新函数
+            drawPointsOnExistingAxes(clusterRslt2D.pcInput, ... 
                 'clusterID', clusterRslt2D.clusterIdx, ...
                 'power', clusterRslt2D.pw, ...
                 'roi', roi);
         end
 
         % --- 步骤 3: 美化图像 ---
+        % (这部分代码保持不变)
         plot(0, 0, 'kv', 'MarkerSize', 12, 'MarkerFaceColor', 'k'); % 绘制雷达
         hold off;
         grid on;
@@ -225,6 +309,7 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         title(['二维俯视点云图 (帧: ', num2str(iFrm), ')']);
     end
     % =========================================================================
+
 
 
     % --- 循环末尾 ---

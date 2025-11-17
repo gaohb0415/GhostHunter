@@ -10,14 +10,14 @@ addpath(genpath(pwd))
 config2243          % 载入雷达相关配置，并且载入雷达采集到的信号文件位置
 
 %% 读取数据
-iFrm = 1;
+iFrm = 2;
 radarData= readBin(iFrm, 0); % 提取某帧，获得的radarData数据就是后面所有数据处理的起点
 
 
 cfg.showRangeFFT        = 0;   % 是否显示 距离-FFT 图
-cfg.showRangeDoppler    = 0;   % 是否显示 距离-多普勒 图
-cfg.showRangeAngle      = 1;   % 是否显示 距离-角度 热力图
-cfg.show2DTopDown       = 1;   % 是否显示 2D俯视图 (含真值)
+cfg.showRangeDoppler    = 1;   % 是否显示 距离-多普勒 图
+cfg.showRangeAngle      = 0;   % 是否显示 距离-角度 热力图
+cfg.show2DTopDown       = 0;   % 是否显示 2D俯视图 (含真值)
 cfg.show3DPointCloud    = 0;   % 是否显示 3D点云 图
 cfg.show3DClusteredPC   = 0;   % 是否显示 3D点云聚类 图
 
