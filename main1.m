@@ -9,9 +9,9 @@ addpath(genpath(pwd));
 
 %% =================== 1. 控制与配置面板 ===================
 % --- 播放控制 ---
-cfg.startFrame = 1;
-cfg.endFrame   = 210;
-cfg.frameStep  = 2;
+cfg.startFrame = 148;
+cfg.endFrame   = 148;
+cfg.frameStep  = 1;
 cfg.pauseTime  = 0.1;
 
 
@@ -40,7 +40,7 @@ roi.angle = [-90, +90];    % 单位: 度
 
 % 【修改】雷达(小推车)的“初始”朝向
 % 无论动态还是静态，这都是雷达安装的初始角度
-cfg.ego_start_yaw_deg = -30; %向左为正
+cfg.ego_start_yaw_deg = -15; %向左为正
 
 
 % 真值车辆
@@ -54,11 +54,11 @@ ground_truth_world.path.y = [ 8.43, 8.43];
 
 % --- 图像生成开关 ---
 % 你想看哪个图，就把它设为 true, 不想看就设为 false
-cfg.showRangeFFT    = false;
-cfg.showRangeAngle  = false;
+cfg.showRangeFFT    = true;
+cfg.showRangeAngle  = true;
 cfg.show3DPointCloud= false;
 cfg.showClusteredPC = false;
-cfg.show2DTopDown   = true; 
+cfg.show2DTopDown   = false; 
 cfg.showRangeDoppler = false;
 
 
@@ -112,7 +112,6 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         fprintf('读取第 %d 帧失败，可能已到达文件末尾。播放结束。\n', iFrm);
         break;
     end
-
 
 
     % =======================【新增：动态/静态 真值处理模块】=======================
@@ -170,7 +169,6 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
     end
 
 
-
     % --- 2D俯视点云图，则计算或加载 pcRA（缓存功能） ---
     if cfg.show2DTopDown
         % 1. 定义当前帧的缓存文件路径
@@ -197,6 +195,49 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
             save(cacheFile, 'pcRA');
         end
     end
+
+
+    % =======================【2D点云俯视图 (代码复用)】=======================
+    % 【修改】此模块现在完全复用，它只负责绘制 gt_to_plot
+    % 而 gt_to_plot 变量的内容由上面的【动态/静态 真值处理模块】决定
+    if cfg.show2DTopDown
+        figure(5); % 激活或创建5号窗口
+        clf;       % 清空上一帧的画面
+        hold on;   % *** 关键：准备在同一张图上叠加绘制所有元素 ***
+
+        % --- 步骤 1: 绘制【当前帧】的真值作为背景 ---
+        % 【修改】
+        % 不再绘制固定的 rotated_ground_truth
+        % 而是绘制我们刚刚在上面 if/else 块中计算出的 gt_to_plot
+        h_car = plot(gt_to_plot.car.x, gt_to_plot.car.y, 'r-', 'LineWidth', 2);
+        h_path = plot(gt_to_plot.path.x, gt_to_plot.path.y, 'r--', 'LineWidth', 2);
+
+        % --- 步骤 2: 在真值背景上，绘制雷达检测到的点云 ---
+        % (这部分代码保持不变)
+        if exist('pcRA', 'var') && ~isempty(pcRA.x)
+            clusterRslt2D = pcCluster2D([pcRA.x, pcRA.y], 'pw', pcRA.power, 'drawEn', 0);
+
+            drawPointsOnExistingAxes(clusterRslt2D.pcInput, ... 
+                'clusterID', clusterRslt2D.clusterIdx, ...
+                'power', clusterRslt2D.pw, ...
+                'roi', roi);
+        end
+
+        % --- 步骤 3: 美化图像 ---
+        % (这部分代码保持不变)
+        plot(0, 0, 'kv', 'MarkerSize', 12, 'MarkerFaceColor', 'k'); % 绘制雷达
+        hold off;
+        grid on;
+        axis equal;
+        xlim([-4, 4]);
+        ylim([0, 8]);
+        xlabel('X (m)');
+        ylabel('Y (m)');
+       
+        title(['二维俯视点云图 (帧: ', num2str(iFrm), ')']);
+    end
+    % =========================================================================
+
     
 
 
@@ -320,54 +361,6 @@ for iFrm = cfg.startFrame : cfg.frameStep : cfg.endFrame
         
     end
     % ============================================================================
-
-
-
-
-
-
-
-   % =======================【2D点云俯视图 (代码复用)】=======================
-    % 【修改】此模块现在完全复用，它只负责绘制 gt_to_plot
-    % 而 gt_to_plot 变量的内容由上面的【动态/静态 真值处理模块】决定
-    if cfg.show2DTopDown
-        figure(5); % 激活或创建5号窗口
-        clf;       % 清空上一帧的画面
-        hold on;   % *** 关键：准备在同一张图上叠加绘制所有元素 ***
-
-        % --- 步骤 1: 绘制【当前帧】的真值作为背景 ---
-        % 【修改】
-        % 不再绘制固定的 rotated_ground_truth
-        % 而是绘制我们刚刚在上面 if/else 块中计算出的 gt_to_plot
-        h_car = plot(gt_to_plot.car.x, gt_to_plot.car.y, 'r-', 'LineWidth', 2);
-        h_path = plot(gt_to_plot.path.x, gt_to_plot.path.y, 'r--', 'LineWidth', 2);
-
-        % --- 步骤 2: 在真值背景上，绘制雷达检测到的点云 ---
-        % (这部分代码保持不变)
-        if exist('pcRA', 'var') && ~isempty(pcRA.x)
-            clusterRslt2D = pcCluster2D([pcRA.x, pcRA.y], 'pw', pcRA.power, 'drawEn', 0);
-
-            drawPointsOnExistingAxes(clusterRslt2D.pcInput, ... 
-                'clusterID', clusterRslt2D.clusterIdx, ...
-                'power', clusterRslt2D.pw, ...
-                'roi', roi);
-        end
-
-        % --- 步骤 3: 美化图像 ---
-        % (这部分代码保持不变)
-        plot(0, 0, 'kv', 'MarkerSize', 12, 'MarkerFaceColor', 'k'); % 绘制雷达
-        hold off;
-        grid on;
-        axis equal;
-        xlim([-4, 4]);
-        ylim([0, 8]);
-        xlabel('X (m)');
-        ylabel('Y (m)');
-       
-        title(['二维俯视点云图 (帧: ', num2str(iFrm), ')']);
-    end
-    % =========================================================================
-
 
 
     % --- 循环末尾 ---

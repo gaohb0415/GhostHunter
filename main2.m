@@ -10,18 +10,19 @@ addpath(genpath(pwd))
 config2243          % 载入雷达相关配置，并且载入雷达采集到的信号文件位置
 
 %% 读取数据
-iFrm = 115;
+iFrm = 148;
 radarData= readBin(iFrm, 0); % 提取某帧，获得的radarData数据就是后面所有数据处理的起点
 
 
-cfg.showRangeFFT        = 0;   % 是否显示 距离-FFT 图
-cfg.showRangeDoppler    = 1;   % 是否显示 距离-多普勒 图
-cfg.showRangeAngle      = 0;   % 是否显示 距离-角度 热力图
+cfg.showRangeFFT        = 1;   % 是否显示 距离-FFT 图
+cfg.showRangeDoppler    = 0;   % 是否显示 距离-多普勒 图
+cfg.showRangeAngle      = 1;   % 是否显示 距离-角度 热力图
 cfg.show2DTopDown       = 0;   % 是否显示 2D俯视图 (含真值)
 cfg.show3DPointCloud    = 0;   % 是否显示 3D点云 图
 cfg.show3DClusteredPC   = 0;   % 是否显示 3D点云聚类 图
 
-radar_yaw_angle_deg = -30;  % 雷达旋转角度控制
+
+radar_yaw_angle_deg = -15;  % 雷达旋转角度控制
 
 % ROI设置
 roi.range = [0, 8];        % 单位: 米
@@ -62,16 +63,18 @@ rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angl
 % drawEn：1.生成FFT图 0. 不生成
 % pcEn：1. 在生成的FFT上面标注出点云信息 0.不标注
 % 距离点云
-[fftRsltRg, pcRg] = fftRange(radarData, 'pcEn', 1, 'drawEn', cfg.showRangeFFT); % Range FFT ，画出RangeFFT的波形图
+[fftRsltRg, pcRg] = fftRange(radarData, 'pcEn', 0, 'drawEn', cfg.showRangeFFT); % Range FFT ，画出RangeFFT的波形图
+
+    
 % RD速度点云
-[fftRsltRD, pcRD] = fftDoppler(fftRsltRg, 'pcEn', 1, 'drawEn', cfg.showRangeDoppler); % Doppler FFT
+[fftRsltRD, pcRD] = fftDoppler(fftRsltRg, 'pcEn', 0, 'drawEn', cfg.showRangeDoppler); % Doppler FFT
 
 % 一维数字波束形成（DBF），用于测算物体的方位角（目标在那个方向？）
 % 生成的是 Range-Angle Map 图像
 % [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', [0, 8], 'resAng', 1, 'drawEn', 1); % 1D DBF，画出的是物体的极坐标雷达图
 
 % pcRA 角度、强度点云
-[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', roi.range, 'limitAng', roi.angle, 'resAng', 0.05, 'drawEn', cfg.showRangeAngle);
+[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 0, 'limitR', [4,6], 'limitAng', [-15,+0], 'resAng', 0.05, 'drawEn', cfg.showRangeAngle);
 % [pwRAE, heatmapAE] = dbfProc2D(fftRsltRg, 'limitR', [2, 4], 'limitAz', [-30, 30], 'limitEl', [-30, 20], 'resAz', 0.25, 'resEl', 0.25); % 2D DBF
 % [fftRsltAng1D, pcRA] = fftAngle1D(fftRsltRg, 'limitR', [0, 8], 'pcEn', 0, 'drawEn', 1); % 1D Angle FFT
 % [fftRsltAng2D, heatmapAE] = fftAngle2D(fftRsltRg, 'limitR', [3.8, 4.6], 'drawEn', 1); % 2D Angle FFT
