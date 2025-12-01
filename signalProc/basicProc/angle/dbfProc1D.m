@@ -186,15 +186,15 @@ if velocityEn && nPc
 end
 
 %% 绘图(直接绘制雷达热力图)
-%{
 if drawEn
     % 解决使用polarPcolor绘图时角度与色块的对齐问题
     pwRA = [pwRA, pwRA(:, end)];
     ang = [ang(1); ang(2 : end) - resAng / 2; ang(end)];
     drawRAM(pwRA, rg, ang, 'pcRA', pcRA, 'logEn', logEn); drawnow;
 end
-%}
 
+
+%{
 %% 绘图(绘制雷达热力图并且可以查看图中的点的速度)
 if drawEn
     % --- 步骤 1: 调用你现有的函数，画出完整的背景热力图 ---
@@ -239,3 +239,4 @@ if drawEn
     hold off; % 释放图像，之后的绘图指令会新建画布
     drawnow;
 end
+%}
