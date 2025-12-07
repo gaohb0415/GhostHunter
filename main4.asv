@@ -1,0 +1,166 @@
+% mmWaveMatlab主函数 - 极速双阶段演示版 (High Performance)
+% 优化核心: 移除了循环内的对象创建，改用句柄更新 (set XData/YData/CData)
+% 功能: 10秒动态鬼探头 + 双阶段逻辑切换 + 2x2 仪表盘
+
+%% 1. 初始化与配置
+close all; clear; clc;
+addpath(genpath(pwd));
+
+% --- 动力学参数 ---
+EGO_VELOCITY = 0.579; RADAR_YAW = -15;
+TOTAL_FRAMES = 210; FRAME_PERIOD = 50e-3;
+
+% --- 扫描参数 ---
+CFG_LIMIT_ANG = [-90, 90]; 
+CFG_RES_ANG   = 0.5; 
+CFG_LIMIT_R   = [];
+
+% --- 载入配置 ---
+config2243; 
+try load('config.mat', 'resR', 'resV'); 
+catch, load('.\config\config\config.mat', 'resR', 'resV'); end
+
+% --- 网格与真值 ---
+% 极坐标系 → 直角坐标系
+% 将雷达获得的（极坐标系）热力图中的数据转换到直角坐标系里面
+nAdc = 256; 
+full_grid.range = resR * (0 : nAdc - 1)'; 
+full_grid.angle = CFG_LIMIT_ANG(1) : CFG_RES_ANG : CFG_LIMIT_ANG(2);
+[Ang_Grid, Rng_Grid] = meshgrid(full_grid.angle, full_grid.range);
+X_Plot = Rng_Grid .* sind(Ang_Grid); 
+Y_Plot = Rng_Grid .* cosd(Ang_Grid);
+
+% 真值 (矩形4点)
+ground_truth_world.car.x = [ 1.11, 2.87, 2.87, 1.11];
+ground_truth_world.car.y = [ 5.38, 5.38, 10.11, 10.11];
+car_init_mat = [ground_truth_world.car.x', ground_truth_world.car.y'];
+
+
+
+%% 2. 预创建绘图对象
+hFig = figure('Name', 'Dual-Phase High Performance Dashboard', 'Position', [50, 50, 1400, 900]);
+
+% === 子图1: 几何模型 (左上) ===
+ax1 = subplot(2, 2, 1); hold on; axis equal; grid on;
+h_radar = plot(0, 0, 'k^', 'MarkerSize', 8, 'MarkerFaceColor', 'k');
+% 初始化车身对象 (空数据)
+h_car_fill = fill(nan, nan, [0.8 0.8 0.8], 'FaceAlpha', 0.5);
+h_car_edge = plot(nan, nan, 'k-', 'LineWidth', 1.5);
+% 初始化关键点
+h_pt_A = plot(nan, nan, 'ro', 'MarkerFaceColor', 'r');
+h_pt_C = plot(nan, nan, 'go', 'MarkerFaceColor', 'g');
+% 初始化标题
+title_str1 = title('1. 几何模型 - 初始化...');
+xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
+
+
+% === 子图2: Range-FFT (右上) ===
+ax2 = subplot(2, 2, 2); hold on; grid on;
+h_rfft_line = plot(nan, nan, 'LineWidth', 1.5, 'Color', [0 0.4470 0.7410]);
+% 垂直辅助线 (可移动)
+h_xline_A = xline(nan, 'r--', 'A', 'LineWidth', 1, 'LabelVerticalAlignment', 'bottom');
+h_xline_K = xline(nan, 'm--', 'K', 'LineWidth', 1, 'LabelVerticalAlignment', 'bottom');
+xlim([0, 10]); ylim([40, 120]); 
+xlabel('距离 (m)'); ylabel('幅度 (dB)');
+title_str2 = title('2. Range-FFT 能量分布');
+
+% === 子图3: 原始热力图 (左下) ===
+ax3 = subplot(2, 2, 3); hold on; axis equal; grid on;
+% 初始化 pcolor (全0矩阵)
+h_pcolor1 = pcolor(X_Plot, Y_Plot, zeros(size(X_Plot)));
+set(h_pcolor1, 'EdgeColor', 'none'); shading interp; 
+colormap(ax3, 'jet');
+xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
+title('3. 原始全景 (含车身)');
+
+% === 子图4: 逻辑增强热力图 (右下) ===
+ax4 = subplot(2, 2, 4); hold on; axis equal; grid on;
+h_pcolor2 = pcolor(X_Plot, Y_Plot, zeros(size(X_Plot)));
+set(h_pcolor2, 'EdgeColor', 'none'); shading interp; 
+colormap(ax4, 'jet');
+% 车身叠加框
+h_car_overlay = plot(nan, nan, 'm-', 'LineWidth', 2);
+xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
+title_str4 = title('4. 逻辑增强');
+
+
+
+%% 3. 循环逐帧播放
+for iFrm = 146 : 5 : 146  % TOTAL_FRAMES
+    
+    current_time = (iFrm - 1) * FRAME_PERIOD;
+    
+    % ----------------------- 计算部分 (CPU) -----------------------
+    try radarData = readBin(iFrm, 0); catch, break; end
+    
+    % Step B: FFT
+    [fftRsltRg, ~] = fftRange(radarData, 'pcEn', 0, 'drawEn', 0); 
+    
+    % Step C: 坐标
+    car_pts = get_car_dynamic_coords(iFrm, car_init_mat, EGO_VELOCITY, RADAR_YAW, FRAME_PERIOD);
+    
+    % =========================================================
+    % Step D: 生成当前帧阴影 Mask
+    % =========================================================
+   
+    % --- 通用减法模型 ---
+    % 使用“大扇形 - 阻挡多边形”的方法，自动适应所有遮挡形状
+    ShadowMask = generate_universal_shadow_mask(full_grid, car_pts);
+    
+    % 更新标题状态用于显示
+    PHASE_NAME = 'Universal Subtraction Model';
+    
+    % Step E: Capon
+    % 全范围Capon与限定范围Capon（ShadowMask来控制Capon区域）
+    [pwRA_Full, ~] = dbfProc1D(fftRsltRg, 'limitAng', CFG_LIMIT_ANG, 'resAng', CFG_RES_ANG, ...
+        'limitR', CFG_LIMIT_R, 'Mask', [], 'pcEn', 0, 'drawEn', 0);
+    [pwRA_Roi, ~] = dbfProc1D(fftRsltRg, 'limitAng', CFG_LIMIT_ANG, 'resAng', CFG_RES_ANG, ...
+        'limitR', CFG_LIMIT_R, 'Mask', ShadowMask, 'pcEn', 0, 'drawEn', 0);
+        
+    % ----------------------- 绘图部分 -----------------------
+    if ~ishandle(hFig), break; end 
+    
+    % 1. 更新几何图数据
+    car_x = [car_pts.all_x; car_pts.all_x(1)];
+    car_y = [car_pts.all_y; car_pts.all_y(1)];
+    
+    set(h_car_fill, 'XData', car_x, 'YData', car_y);
+    set(h_car_edge, 'XData', car_x, 'YData', car_y);
+    set(h_pt_A, 'XData', car_pts.A.x, 'YData', car_pts.A.y);
+    set(h_pt_C, 'XData', car_pts.C.x, 'YData', car_pts.C.y);
+    
+    % 更新标题 (显示 Phase)
+    set(title_str1, 'String', {['1. 几何模型 (Frm ' num2str(iFrm) ')'], ['\color{red}' PHASE_NAME]}, 'Interpreter', 'tex');
+    
+    % 重画 Contour (Mask 轮廓比较特殊，点数在变，只能重画，但先删旧的)
+    delete(findobj(ax1, 'Type', 'contour')); 
+    contour(ax1, X_Plot, Y_Plot, ShadowMask, [0.5 0.5], 'm--', 'LineWidth', 1.5);
+
+
+    
+    % 2. 更新 Range-FFT
+    mag_data = abs(fftRsltRg);
+    range_profile = 20 * log10(mean(mag_data, [2, 3, 4]) + 1e-6);
+    
+    set(h_rfft_line, 'XData', full_grid.range, 'YData', range_profile);
+    set(h_xline_A, 'Value', car_pts.A.rho);
+    set(h_xline_K, 'Value', car_pts.K.rho);
+
+
+    
+    % 3. 更新原始热力图
+    set(h_pcolor1, 'CData', pwRA_Full); % <--- 极速更新核心
+    delete(findobj(ax3, 'Type', 'contour'));
+    contour(ax3, X_Plot, Y_Plot, ShadowMask, [0.5 0.5], 'w--', 'LineWidth', 1.5);
+
+    
+    
+    % 4. 更新增强热力图
+    set(h_pcolor2, 'CData', pwRA_Roi);  % <--- 极速更新核心
+    delete(findobj(ax4, 'Type', 'contour'));
+    contour(ax4, X_Plot, Y_Plot, ShadowMask, [0.5 0.5], 'w--', 'LineWidth', 1.5);
+    set(h_car_overlay, 'XData', car_x, 'YData', car_y);
+    
+    % 智能刷新
+    drawnow limitrate; 
+end

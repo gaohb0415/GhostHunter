@@ -9,9 +9,9 @@ addpath(genpath(pwd));
 
 %% =================== 1. 控制与配置面板 ===================
 % --- 播放控制 ---
-cfg.startFrame = 148;
-cfg.endFrame   = 148;
-cfg.frameStep  = 1;
+cfg.startFrame = 1;
+cfg.endFrame   = 210;
+cfg.frameStep  = 5;
 cfg.pauseTime  = 0.1;
 
 
@@ -44,8 +44,8 @@ cfg.ego_start_yaw_deg = -15; %向左为正
 
 
 % 真值车辆
-ground_truth_world.car.x = [ 0.82, 2.85, 2.85, 0.82, 0.82];
-ground_truth_world.car.y = [ 4.23, 4.23, 6.93, 6.93, 4.23];
+ground_truth_world.car.x = [ 1.11, 2.87, 2.87, 1.11];
+ground_truth_world.car.y = [ 5.38, 5.38, 10.11, 10.11];
 % 行人路径
 ground_truth_world.path.x = [ 2.85, 0];
 ground_truth_world.path.y = [ 8.43, 8.43];
@@ -54,11 +54,11 @@ ground_truth_world.path.y = [ 8.43, 8.43];
 
 % --- 图像生成开关 ---
 % 你想看哪个图，就把它设为 true, 不想看就设为 false
-cfg.showRangeFFT    = true;
-cfg.showRangeAngle  = true;
+cfg.showRangeFFT    = false;
+cfg.showRangeAngle  = false;
 cfg.show3DPointCloud= false;
 cfg.showClusteredPC = false;
-cfg.show2DTopDown   = false; 
+cfg.show2DTopDown   = true; 
 cfg.showRangeDoppler = false;
 
 
