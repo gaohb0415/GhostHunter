@@ -59,6 +59,10 @@ p.addOptional('sigReconsEn', 0);        % 是否进行信号重构
 p.addOptional('velocityEn', 0);         % 是否计算每个点的速度
 p.addOptional('drawEn', 0);
 p.addOptional('logEn', 0);
+
+% === 新增参数 ===
+p.addOptional('Mask', []); % 默认为空，即全图计算
+
 p.parse(varargin{:});
 
 limitR = p.Results.limitR;
@@ -71,6 +75,7 @@ sigReconsEn = p.Results.sigReconsEn;
 velocityEn = p.Results.velocityEn;
 drawEn = p.Results.drawEn;
 logEn = p.Results.logEn;
+Mask = p.Results.Mask; % 获取 Mask
 
 % 参数优先级: velocityEn > sigReconsEn > pcEn
 % 测速这个高级功能必须以信号重构为前提
@@ -85,12 +90,16 @@ nRg = size(radarData, 1);
 if isempty(rg); rg = resR * (0 : nRg - 1)'; end % 总距离刻度
 
 %% 提取所选距离范围内的数据
-%% 根据你输入的 limitR，从 radarData 中把对应距离范围的数据切片出来，后续只处理这部分数据
 if any(limitR)
-    aoiRg = [max(limitR(1), rg(1)), min(limitR(2), rg(end))];  % 距离AOI(area of interest)
+    aoiRg = [max(limitR(1), rg(1)), min(limitR(2), rg(end))];
     iAoiRg = rg >= aoiRg(1) & rg <= aoiRg(2);
     rg = rg(iAoiRg);
     radarData = radarData(iAoiRg, :, :, :);
+    
+    % === 关键：如果传入了 Mask，Mask 也要跟着切片！===
+    if ~isempty(Mask)
+        Mask = Mask(iAoiRg, :);
+    end
 end
 
 %% 生成虚拟阵列（目的是同时可以采集多个方向的反射强度：形成圆环）
@@ -105,7 +114,15 @@ nAng = length(ang);
 
 %% 执行DBF数字波束形成(核心计算)
 % 初始化反射强度和权重结果
-pwRA = zeros(nAng * nRg, 1);
+pwRA_Matrix = zeros(nRg, nAng);
+
+% 检查 Mask 维度是否匹配
+if ~isempty(Mask)
+    if size(Mask, 2) ~= nAng
+        error('Mask 的角度维度与生成的角度向量 ang 不匹配！请检查 limitAng 和 resAng 设置。');
+    end
+    % (距离维度已经在上面切片对齐了)
+end
 
 %% 提取各距离的信号进行DBF计算
 %% （波束扫描）：基础的波束形成算法分为CBF和Capon
@@ -113,18 +130,37 @@ pwRA = zeros(nAng * nRg, 1);
 %% 高分辨场景或者刷新率分辨率均衡场景（Capon不需要更改dbf中配置）
 %% 代码逐个距离进行处理。可以想象成把雷达的探测区域按距离切成了一片片的“同心圆环"
 for iRg = 1 : nRg
-    % 将[nAngle, nRange]矩阵"拉伸"成[nAngle * nRange]向量后, 第iRange个距离的角度在该向量中的索引
-    iBinRA = (iRg - 1) * nAng + 1 : iRg * nAng;
-    % 执行DBF, 获得反射强度
-    [pwRA(iBinRA), ~] = dbf(ang, [], antArray.signal(:, :, iRg), antArray.arrayPos, [], 'spacingCal', spacingCal);
+    % 提取当前层信号
+    sig_current = antArray.signal(:, :, iRg);
+    
+    if isempty(Mask)
+        % --- 模式 A: 全计算 (旧逻辑) ---
+        [pw_row, ~] = dbf(ang, [], sig_current, antArray.arrayPos, [], 'spacingCal', spacingCal);
+        pwRA_Matrix(iRg, :) = pw_row;
+        
+    else
+        % --- 模式 B: 掩膜计算 (新逻辑) ---
+        % 1. 找出这一行 Mask 为 1 的索引
+        valid_idx = find(Mask(iRg, :) == 1);
+        
+        if ~isempty(valid_idx)
+            % 2. 只提取需要计算的角度
+            ang_subset = ang(valid_idx);
+            
+            % 3. 调用 Capon (只算这一小部分)
+            [pw_subset, ~] = dbf(ang_subset, [], sig_current, antArray.arrayPos, [], 'spacingCal', spacingCal);
+            
+            % 4. 填回矩阵 (Mask为0的地方保持为0)
+            pwRA_Matrix(iRg, valid_idx) = pw_subset;
+        end
+    end
 end
 % 注意下面的维度顺序
 
-% 波束扫描之后，将pwRA这个单一长向量，重新组织成一个二维矩阵[nAng, nRg]
-pwRA = reshape(pwRA, [nAng, nRg]);
-
-% 行代表距离Range，列代表角度Angle
-pwRA = pwRA'; % 将维度转换为为[Range, Angle]，这就是最终的距离-角度图矩阵（热力图）
+% 转换格式以适配后续流程
+pwRA = pwRA_Matrix'; % 转置为 [Angle, Range] -> [nAng, nRg] (dbf原始输出是列向量拼成的)
+pwRA = reshape(pwRA, [nAng * nRg, 1]); % 拉直 (为了兼容 cfar2D 的输入格式)
+pwRA = reshape(pwRA, [nAng, nRg])';    % 最终变为 [Range, Angle]
 
 %% 点云生成（2D-CFAR）
 %% 将上面的 距离-角度 热力图中的离散的、有意义的目标点的信息打包成一个结构化的数据"点云"
