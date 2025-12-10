@@ -10,7 +10,7 @@ addpath(genpath(pwd))
 config2243          % 载入雷达相关配置，并且载入雷达采集到的信号文件位置
 
 %% 读取数据
-iFrm = 148;
+iFrm = 109;
 radarData= readBin(iFrm, 0); % 提取某帧，获得的radarData数据就是后面所有数据处理的起点
 
 
@@ -63,18 +63,18 @@ rotated_ground_truth = transform_ground_truth(ground_truth_world, radar_yaw_angl
 % drawEn：1.生成FFT图 0. 不生成
 % pcEn：1. 在生成的FFT上面标注出点云信息 0.不标注
 % 距离点云
-[fftRsltRg, pcRg] = fftRange(radarData, 'pcEn', 0, 'drawEn', cfg.showRangeFFT); % Range FFT ，画出RangeFFT的波形图
+[fftRsltRg, pcRg] = fftRange(radarData, 'pcEn', 1, 'drawEn', cfg.showRangeFFT); % Range FFT ，画出RangeFFT的波形图
 
     
 % RD速度点云
-[fftRsltRD, pcRD] = fftDoppler(fftRsltRg, 'pcEn', 0, 'drawEn', cfg.showRangeDoppler); % Doppler FFT
+% [fftRsltRD, pcRD] = fftDoppler(fftRsltRg, 'pcEn', 0, 'drawEn', cfg.showRangeDoppler); % Doppler FFT
 
 % 一维数字波束形成（DBF），用于测算物体的方位角（目标在那个方向？）
 % 生成的是 Range-Angle Map 图像
 % [pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', [0, 8], 'resAng', 1, 'drawEn', 1); % 1D DBF，画出的是物体的极坐标雷达图
 
 % pcRA 角度、强度点云
-[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 0, 'limitR', [4,6], 'limitAng', [-15,+0], 'resAng', 0.05, 'drawEn', cfg.showRangeAngle);
+[pwRA, pcRA] = dbfProc1D(fftRsltRg, 'pcEn', 1, 'limitR', [0,10], 'limitAng', [-90,+90], 'resAng', 0.05, 'drawEn', cfg.showRangeAngle);
 % [pwRAE, heatmapAE] = dbfProc2D(fftRsltRg, 'limitR', [2, 4], 'limitAz', [-30, 30], 'limitEl', [-30, 20], 'resAz', 0.25, 'resEl', 0.25); % 2D DBF
 % [fftRsltAng1D, pcRA] = fftAngle1D(fftRsltRg, 'limitR', [0, 8], 'pcEn', 0, 'drawEn', 1); % 1D Angle FFT
 % [fftRsltAng2D, heatmapAE] = fftAngle2D(fftRsltRg, 'limitR', [3.8, 4.6], 'drawEn', 1); % 2D Angle FFT
@@ -97,7 +97,7 @@ pc3D = pcFrom4DFFT(radarData, 'limitR', [0.8, 7.2], 'limitX', [-3, 3], 'limitY',
 % pc3D = pcFrom2PassDBF(radarData, 'limitR', [0.8, 7.2], 'limitX', [-3, 3], 'limitY', [1.2, 6.8], 'limitZ', [0, 2], 'nPeakEl', 1, 'drawEn', 1); % 2-Pass DBF
 
 % 点云聚类
-clusterXY = pcCluster2D([pcRA.x, pcRA.y], 'pw', [], 'limitXV', [-3.2, 3.2], 'limitY', [1.6, 6.4], 'drawEn', 0); % XY点云聚类
+clusterXY = pcCluster2D([pcRA.x, pcRA.y], 'pw', [], 'limitXV', [-3.2, 3.2], 'limitY', [1.6, 6.4], 'drawEn', 1); % XY点云聚类
 % clusterVY = pcCluster2D([pcRD.velocity, pcRD.range], 'pcType', 'VY', 'pw', [], 'limitY', [1.6, 6.4], 'drawEn', 1); % XV点云聚类
 
 clusterXYZ= pcCluster3D([pc3D.x, pc3D.y, pc3D.z], 'pw', [], 'vel', pc3D.vel, 'limitX', [-3, 3], 'limitY', [1.2, 6.8], 'limitZV', [0, 2], 'drawEn', cfg.show3DClusteredPC); % XYZ点云聚类
