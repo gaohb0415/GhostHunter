@@ -5,7 +5,7 @@
 close all; clear; clc;
 addpath(genpath(pwd));
 % --- 动力学参数 ---
-EGO_VELOCITY = 0.538;        % 雷达车速度 (m/s)
+EGO_VELOCITY = 0.34;        % 雷达车速度 (m/s)
 RADAR_YAW    = -30;          % 雷达安装偏角 (度)
 TOTAL_FRAMES = 210; 
 FRAME_PERIOD = 50e-3;
@@ -24,16 +24,14 @@ full_grid.angle = CFG_LIMIT_ANG(1) : CFG_RES_ANG : CFG_LIMIT_ANG(2);
 [Ang_Grid, Rng_Grid] = meshgrid(full_grid.angle, full_grid.range);
 X_Plot = Rng_Grid .* sind(Ang_Grid); 
 Y_Plot = Rng_Grid .* cosd(Ang_Grid);
-
 % =====================【实验真值数据】=====================
-ground_truth_world.car.x = [ 1.11, 2.87, 2.87, 1.11];
-ground_truth_world.car.y = [ 5.38, 5.38, 10.11, 10.11];
+ground_truth_world.car.x = [ 1.07, 2.97, 2.97, 1.07];
+ground_truth_world.car.y = [ 3.4, 3.4, 7.7, 7.7];
 car_init_mat = [ground_truth_world.car.x', ground_truth_world.car.y'];
-ped_path_x = [0,    4.47,  4.47]; 
-ped_path_y = [11.87, 11.87, 9.3];
+ped_path_x = [1.07, 3.48, 3.48]; 
+ped_path_y = [8.5, 8.5, 5.3];
 ped_init_mat = [ped_path_x', ped_path_y'];
 % ===============================================================
-
 %% 2. 预创建绘图对象
 hFig = figure('Name', 'Ghost Probe Interference Cancellation', 'Position', [50, 50, 1400, 900]);
 % === 子图1: 几何模型 ===
@@ -44,15 +42,13 @@ h_car_edge = plot(nan, nan, 'k-', 'LineWidth', 1.5);
 h_ped_geom = plot(nan, nan, 'g--', 'LineWidth', 2); 
 title_str1 = title('1. 几何模型');
 xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
-
 % === 子图2: Range-FFT ===
 ax2 = subplot(2, 2, 2); hold on; grid on;
 h_rfft_line = plot(nan, nan, 'LineWidth', 1.5, 'Color', [0 0.4470 0.7410]);
-h_xline_A = xline(nan, 'r--', 'A', 'LineWidth', 1, 'LabelVerticalAlignment', 'bottom');
+% 【已移除】h_xline_A 标识线
 xlim([0, 10]); ylim([40, 120]); 
 xlabel('距离 (m)'); ylabel('幅度 (dB)');
 title('2. Range-FFT');
-
 % === 子图3: 原始热力图 (未处理) ===
 ax3 = subplot(2, 2, 3); hold on; axis equal; grid on;
 h_pcolor1 = pcolor(X_Plot, Y_Plot, zeros(size(X_Plot)));
@@ -60,7 +56,6 @@ set(h_pcolor1, 'EdgeColor', 'none'); shading interp; colormap(ax3, 'jet');
 h_ped_overlay1 = plot(nan, nan, 'w:', 'LineWidth', 2.5); 
 xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
 title('3. 原始数据 Capon (旁瓣污染严重)');
-
 % === 子图4: RELAX + ROI Capon ===
 ax4 = subplot(2, 2, 4); hold on; axis equal; grid on;
 h_pcolor2 = pcolor(X_Plot, Y_Plot, zeros(size(X_Plot)));
@@ -69,9 +64,8 @@ h_car_overlay = plot(nan, nan, 'm-', 'LineWidth', 2);
 h_ped_overlay2 = plot(nan, nan, 'w:', 'LineWidth', 2.5); 
 xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
 title_str4 = title('4. 干扰对消 + ROI Capon (净化后)');
-
 %% 3. 循环
-for iFrm = 157 : 1 : TOTAL_FRAMES
+for iFrm = 1 : 1 : TOTAL_FRAMES
     
     current_time = (iFrm - 1) * FRAME_PERIOD;
     
@@ -110,7 +104,6 @@ for iFrm = 157 : 1 : TOTAL_FRAMES
     
     min_car_ang = min(all_angles) - 2; % 留一点余量
     max_car_ang = max(all_angles) + 2;
-
     
     % 4. 逐个距离门进行“清洗”
     for r_idx = car_range_indices'
@@ -204,7 +197,6 @@ for iFrm = 157 : 1 : TOTAL_FRAMES
     
     % =====================================================================
     
-
     % 5. Capon 成像
     % 图3: 用原始数据 (展示脏的情况)
     [pwRA_Full, ~] = dbfProc1D(fftRsltRg, 'limitAng', CFG_LIMIT_ANG, 'resAng', CFG_RES_ANG, ...
@@ -241,7 +233,7 @@ for iFrm = 157 : 1 : TOTAL_FRAMES
     mag_data = abs(fftRsltRg);
     range_profile = 20 * log10(mean(mag_data, [2, 3, 4]) + 1e-6);
     set(h_rfft_line, 'XData', full_grid.range, 'YData', range_profile);
-    set(h_xline_A, 'Value', car_pts.A.rho);
+    % 【已移除】h_xline_A 更新代码
     
     % 更新热力图
     set(h_pcolor1, 'CData', pwRA_Full); 
@@ -249,7 +241,6 @@ for iFrm = 157 : 1 : TOTAL_FRAMES
     
     drawnow limitrate; 
 end
-
 %% ================= 辅助函数: 通用坐标变换 =================
 function pts_radar = transform_world_to_radar(pts_world, v, yaw, t)
     dy = v * t;
