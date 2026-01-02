@@ -1,22 +1,33 @@
-% mmWaveMatlab主函数 - 最终全功能版 (含干扰对消 + ROI Capon)
-% 功能: 10秒动态鬼探头 + 物理层干扰对消 (Signal Purification)
-% 场景: 雷达向前运动，右偏15度，车静止，人沿预定轨迹运动
+% mmWaveMatlab主函数 - 对比版 
+% 功能: 10秒动态鬼探头 + 物理层干扰对消
+% ---------------------------------------------------------
+
 %% 1. 初始化与配置
-close all; clear; clc;
+close all; clear; clc; 
 addpath(genpath(pwd));
+
+% =====================【功能开关】=====================
+% 0 = 仅显示 ROI (原模式): 能够看清弱目标，背景干净
+% 1 = 显示全角度 (-90~+90): 能够直观对比RELAX把车身消除了多少
+ENABLE_FULL_ANGLE_VIEW = 0; 
+% ======================================================
+
 % --- 动力学参数 ---
-EGO_VELOCITY = 0.34;        % 雷达车速度 (m/s)
+EGO_VELOCITY = 0.363;        % 雷达车速度 (m/s)
 RADAR_YAW    = -30;          % 雷达安装偏角 (度)
 TOTAL_FRAMES = 210; 
 FRAME_PERIOD = 50e-3;
+
 % --- 扫描参数 ---
 CFG_LIMIT_ANG = [-90, 90]; 
 CFG_RES_ANG   = 0.5; 
 CFG_LIMIT_R   = [];
+
 % --- 载入配置 ---
 config2243; 
 try load('config.mat', 'resR', 'resV'); 
 catch, load('.\config\config\config.mat', 'resR', 'resV'); end
+
 % --- 网格构建 ---
 nAdc = 256; 
 full_grid.range = resR * (0 : nAdc - 1)'; 
@@ -24,16 +35,19 @@ full_grid.angle = CFG_LIMIT_ANG(1) : CFG_RES_ANG : CFG_LIMIT_ANG(2);
 [Ang_Grid, Rng_Grid] = meshgrid(full_grid.angle, full_grid.range);
 X_Plot = Rng_Grid .* sind(Ang_Grid); 
 Y_Plot = Rng_Grid .* cosd(Ang_Grid);
+
 % =====================【实验真值数据】=====================
-ground_truth_world.car.x = [ 1.07, 2.97, 2.97, 1.07];
-ground_truth_world.car.y = [ 3.4, 3.4, 7.7, 7.7];
+ground_truth_world.car.x = [1.11, 2.87, 2.87, 1.11];
+ground_truth_world.car.y = [3.63, 3.63, 7.97, 7.97];
 car_init_mat = [ground_truth_world.car.x', ground_truth_world.car.y'];
-ped_path_x = [1.07, 3.48, 3.48]; 
-ped_path_y = [8.5, 8.5, 5.3];
+ped_path_x = [3.44, 3.44, 1.11];
+ped_path_y = [5.8, 8.62, 8.62];
 ped_init_mat = [ped_path_x', ped_path_y'];
 % ===============================================================
+
 %% 2. 预创建绘图对象
 hFig = figure('Name', 'Ghost Probe Interference Cancellation', 'Position', [50, 50, 1400, 900]);
+
 % === 子图1: 几何模型 ===
 ax1 = subplot(2, 2, 1); hold on; axis equal; grid on;
 plot(0, 0, 'k^', 'MarkerSize', 8, 'MarkerFaceColor', 'k');
@@ -42,30 +56,34 @@ h_car_edge = plot(nan, nan, 'k-', 'LineWidth', 1.5);
 h_ped_geom = plot(nan, nan, 'g--', 'LineWidth', 2); 
 title_str1 = title('1. 几何模型');
 xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
+
 % === 子图2: Range-FFT ===
 ax2 = subplot(2, 2, 2); hold on; grid on;
 h_rfft_line = plot(nan, nan, 'LineWidth', 1.5, 'Color', [0 0.4470 0.7410]);
-% 【已移除】h_xline_A 标识线
 xlim([0, 10]); ylim([40, 120]); 
 xlabel('距离 (m)'); ylabel('幅度 (dB)');
 title('2. Range-FFT');
-% === 子图3: 原始热力图 (未处理) ===
+
+% === 子图3: 对照组 (原始数据) ===
 ax3 = subplot(2, 2, 3); hold on; axis equal; grid on;
 h_pcolor1 = pcolor(X_Plot, Y_Plot, zeros(size(X_Plot)));
 set(h_pcolor1, 'EdgeColor', 'none'); shading interp; colormap(ax3, 'jet');
 h_ped_overlay1 = plot(nan, nan, 'w:', 'LineWidth', 2.5); 
 xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
-title('3. 原始数据 Capon (旁瓣污染严重)');
-% === 子图4: RELAX + ROI Capon ===
+title_str3 = title('3. 原始数据 (无RELAX)');
+
+% === 子图4: 实验组 (RELAX数据) ===
 ax4 = subplot(2, 2, 4); hold on; axis equal; grid on;
 h_pcolor2 = pcolor(X_Plot, Y_Plot, zeros(size(X_Plot)));
 set(h_pcolor2, 'EdgeColor', 'none'); shading interp; colormap(ax4, 'jet');
 h_car_overlay = plot(nan, nan, 'm-', 'LineWidth', 2);
 h_ped_overlay2 = plot(nan, nan, 'w:', 'LineWidth', 2.5); 
 xlim([-11, 11]); ylim([0, 12]); xlabel('X (m)'); ylabel('Y (m)');
-title_str4 = title('4. 干扰对消 + ROI Capon (净化后)');
+title_str4 = title('4. 干扰对消 (有RELAX)');
+
 %% 3. 循环
-for iFrm = 1 : 1 : TOTAL_FRAMES
+% 
+for iFrm = 133 : 2 : 133
     
     current_time = (iFrm - 1) * FRAME_PERIOD;
     
@@ -79,133 +97,173 @@ for iFrm = 1 : 1 : TOTAL_FRAMES
     car_pts = get_car_dynamic_coords(iFrm, car_init_mat, EGO_VELOCITY, RADAR_YAW, FRAME_PERIOD);
     ped_pts_radar = transform_world_to_radar(ped_init_mat, EGO_VELOCITY, RADAR_YAW, current_time);
     
-    % 3. Mask 生成 (用于划定 ROI，也用于告诉RELAX算法车在哪里)
+    % 3. Mask 生成 (RELAX定位仍然需要用到它来找车)
     ShadowMask = generate_universal_shadow_mask(full_grid, car_pts);
-    PHASE_NAME = 'Interference Cancellation...';
     
     % =====================================================================
     % 【Step 4.5: 物理层干扰对消 (Signal Purification)】
-    % 核心思想: 模拟车的信号(含旁瓣)，从原始数据中减去它
     % =====================================================================
     
-    % 1. 复制一份数据用于净化，保留原始数据用于对比
+    PHASE_NAME = 'Interference Cancellation...';
     fftRsltRg_Clean = fftRsltRg; 
     
-    % 2. 确定车的范围 (Range Domain)
-    % 简单做法: 取车几何中心前后 1.5米 的范围
+    % 确定车的范围 (Range Domain)
     car_center_rho = (car_pts.A.rho + car_pts.K.rho) / 2;
-    dist_mask = abs(full_grid.range - car_center_rho) < 2.5; % 稍微放宽一点范围，覆盖整个车身
+    dist_mask = abs(full_grid.range - car_center_rho) < 2.5; 
     car_range_indices = find(dist_mask);
     
-    % 3. 确定车的角度范围 (Angle Domain)
-    % 直接使用包含所有顶点的 all_x 和 all_y 数组
-    % 注意: 根据你的坐标系定义 (x = r*sin, y = r*cos), 角度应该是 atan2(x, y)
+    % 确定车的角度范围 (Angle Domain)
     all_angles = atan2d(car_pts.all_x, car_pts.all_y);
-    
-    min_car_ang = min(all_angles) - 2; % 留一点余量
+    min_car_ang = min(all_angles) - 2; 
     max_car_ang = max(all_angles) + 2;
     
-    % 4. 逐个距离门进行“清洗”
+    % 逐个距离门进行“清洗”
     for r_idx = car_range_indices'
-        % A. 提取快拍 & 预处理
+        % 2. 提取切片：从巨大的三维矩阵中，取出当前这“一米”的数据
         raw_slice = squeeze(fftRsltRg(r_idx, :, :, :));
+        
+        % 3. 维度重整：[通道 x 接收 x 发射] -> [虚拟天线总数 x 快拍数]
+        % 这一步非常关键！它把物理天线排列成了数学上的一个长向量。
+        
         if ndims(raw_slice) == 3 
              [nCh, nRx, nTx] = size(raw_slice);
              raw_slice = reshape(raw_slice, nCh, nRx*nTx);
         end
-        snapshot = raw_slice.'; % -> [M天线 x N快拍]
+
+        % 4. 转置：snapshot 是 [M天线 x N快拍]
+        % 这就是 RELAX 的输入 "y"。每一列代表某个时刻所有天线收到的一组数据。
+
+        snapshot = raw_slice.'; 
         [M, N_Snaps] = size(snapshot);
         
-        % =========================================================
-        % === RELAX 算法核心: 构建完美的车辆干扰模型 ===
-        % =========================================================
+        % === RELAX 算法 ===
+    K_Comps = 3; % 设定我们要找 3 个强散射中心（车头、B柱、车尾）
+    
+    % 准备两个空数组，用来存“嫌疑人”的特征（角度和能量）
+    rel_angles = zeros(1, K_Comps);
+    rel_alphas = zeros(1, K_Comps); 
+    
+    % --- 初始化 ---
+    residual = snapshot; % 开始时，残差就是原始信号
+    
+    % 5. 构建字典 (Steering Vector Dictionary)
+    % 我们只在“车所在的角域”内搜索 (min_car_ang ~ max_car_ang)，节省计算量
+    search_ang = min_car_ang : 0.5 : max_car_ang; 
+    
+    % 生成导向矢量矩阵 A_scan。
+    % 这是一个“标准答案库”。每一列代表一个角度的理想信号相位。
+    % 公式：a(theta) = exp(-j * pi * n * sin(theta))
+    A_scan = exp(-1j * pi * (0:M-1)' * sind(search_ang)); 
+    
+    % 6. 循环 K 次，依次找出最强的 3 个点
+    for k = 1:K_Comps
+
+        % [核心步骤] 匹配滤波 (Matched Filter) / 波束形成
+        % 拿残差信号去和字典里的每个角度做内积。
+        % abs(...) 算的是相关性的模长。sum(..., 2) 是对所有快拍求和（非相干积累），提高信噪比。
+
+        spec = sum(abs(A_scan' * residual), 2);
         
-        K_Comps = 3; % 假设车身由 3 个主要散射中心组成
+        % 找到峰值：这一步就是在问“现在哪个角度最亮？”
+        [~, idx] = max(spec);
+        rel_angles(k) = search_ang(idx); % 记录下这个可疑的角度
         
-        % 存储每个分量的参数
-        rel_angles = zeros(1, K_Comps);
-        rel_alphas = zeros(1, K_Comps); % 暂时假设单快拍或相干
+        % 7. 估计幅度 (Complex Amplitude Estimation)
+        % 既然知道角度了，生成该角度的导向矢量 a_k
+        a_k = exp(-1j * pi * (0:M-1)' * sind(rel_angles(k)));
         
-        % --- 阶段 1: 初始化 (就是之前的 CLEAN 过程) ---
-        residual = snapshot;
-        search_ang = min_car_ang : 0.5 : max_car_ang; % 仅在车身范围内搜索
-        A_scan = exp(-1j * pi * (0:M-1)' * sind(search_ang)); % 预计算导向矢量库
+        % 最小二乘解 (Least Squares)：计算这个方向上的信号到底有多强(alpha)
+        % 公式：alpha = (a^H * y) / (a^H * a)
+        rel_alphas(k) = (a_k' * residual(:,1)) / (a_k' * a_k); 
         
-        for k = 1:K_Comps
-            % Beamforming 找最大值
-            spec = sum(abs(A_scan' * residual), 2);
-            [~, idx] = max(spec);
-            rel_angles(k) = search_ang(idx);
-            
-            % 投影求幅度
-            a_k = exp(-1j * pi * (0:M-1)' * sind(rel_angles(k)));
-            rel_alphas(k) = (a_k' * residual(:,1)) / (a_k' * a_k); % 简化取第1个快拍幅值
-            
-            % 更新残差
-            residual = residual - rel_alphas(k) * a_k;
-        end
+        % 8. 消除 (Subtraction)
+        % 从残差里减去这个刚才找到的信号。
+        % residual(新) = residual(旧) - alpha * a(theta)
+        residual = residual - rel_alphas(k) * a_k;
+    end
         
-        % --- 阶段 2: RELAX 迭代优化 ---
-        % 反复打磨这 3 个点，让它们配合得天衣无缝
-        MAX_RELAX_ITER = 5; % 迭代 5 次通常足够收敛
-        
-        for iter = 1 : MAX_RELAX_ITER
-            for k = 1 : K_Comps
-                % 1. "反悔": 把当前要优化的第 k 个点加回来
-                %    (或者说：从原始数据中，把除了 k 以外的所有点减掉)
-                data_k = snapshot; % 从原始数据开始
-                for other = 1 : K_Comps
-                    if other ~= k
-                        a_other = exp(-1j * pi * (0:M-1)' * sind(rel_angles(other)));
-                        data_k = data_k - rel_alphas(other) * a_other;
-                    end
-                end
-                
-                % 2. "重算": 在更纯净的环境下重新估计第 k 个点
-                %    (依然限制在车身角度范围内)
-                spec = sum(abs(A_scan' * data_k), 2);
-                [~, idx] = max(spec);
-                rel_angles(k) = search_ang(idx); % 更新角度
-                
-                % 更新幅度
-                a_new = exp(-1j * pi * (0:M-1)' * sind(rel_angles(k)));
-                rel_alphas(k) = (a_new' * data_k(:,1)) / (a_new' * a_new);
-            end
-        end
-        
-        % =========================================================
-        % === 最终净化: 减去优化后的车辆模型 ===
-        % =========================================================
-        
-        % 构建最终的车辆总信号 (Total Interference)
-        total_interference = zeros(size(snapshot));
+        % --- 迭代优化 ---
+    MAX_RELAX_ITER = 5; % 给它 5 次修正机会
+    
+    for iter = 1 : MAX_RELAX_ITER
+        % 对每一个已经找到的嫌疑人 k (1, 2, 3) 进行轮询修正
         for k = 1 : K_Comps
-            a_final = exp(-1j * pi * (0:M-1)' * sind(rel_angles(k)));
-            total_interference = total_interference + rel_alphas(k) * a_final;
+            
+            % 9. “加回”操作 (Add Back)
+            % 这是最精髓的一步！
+            % 我们想重新估计第 k 个点，怎么做？
+            % 我们把原始信号 snapshot 拿来，把“除了 k 以外的其他所有嫌疑人”都减掉。
+            % 剩下的 data_k 里面就只包含：第 k 个点的信号 + 噪声。
+            data_k = snapshot; 
+            for other = 1 : K_Comps
+                if other ~= k
+                    % 生成其他人的信号模型
+                    a_other = exp(-1j * pi * (0:M-1)' * sind(rel_angles(other)));
+                    % 减去其他人
+                    data_k = data_k - rel_alphas(other) * a_other;
+                end
+            end
+            
+            % 10. 重搜 (Re-estimation)
+            % 现在 data_k 很干净了（排除了其他强干扰），我们再测一次角度。
+            % 这次测出来的角度，比初始化阶段要准得多！
+            spec = sum(abs(A_scan' * data_k), 2);
+            [~, idx] = max(spec);
+            
+            % 更新参数：用更准的值覆盖旧值
+            rel_angles(k) = search_ang(idx); 
+            a_new = exp(-1j * pi * (0:M-1)' * sind(rel_angles(k)));
+            rel_alphas(k) = (a_new' * data_k(:,1)) / (a_new' * a_new);
         end
+        % 这一层循环结束后，3 个点的参数互相配合，误差越来越小。
+    end
         
-        % 执行减法
-        snapshot_clean = snapshot - total_interference;
-        
-        % 放回数据矩阵
-        try
-            fftRsltRg_Clean(r_idx, :, :) = snapshot_clean.'; 
-        catch
-             fftRsltRg_Clean(r_idx, :, :, :) = reshape(snapshot_clean.', [1, size(raw_slice,1), size(raw_slice,2)/size(raw_slice,3), size(raw_slice,3)]);
-        end
+
+        % --- 最终净化 ---
+    total_interference = zeros(size(snapshot));
+    
+    % 11. 重构干扰信号 (Interference Reconstruction)
+    % 利用刚才算出来的“精准角度”和“精准幅度”，数学合成一个完美的遮挡车回波。
+    for k = 1 : K_Comps
+        a_final = exp(-1j * pi * (0:M-1)' * sind(rel_angles(k)));
+        % 把 3 个强点的信号累加起来
+        total_interference = total_interference + rel_alphas(k) * a_final;
     end
     
+    % 12. 最终对消
+    % 原始数据 - 完美的车 = 弱目标(行人) + 噪声
+    snapshot_clean = snapshot - total_interference;
+    
+    % 13. 归位
+    % 把清洗干净的数据放回原来的矩阵里，准备送去画图
+    try
+        fftRsltRg_Clean(r_idx, :, :) = snapshot_clean.'; 
+    catch
+         % ... (reshape 处理)
+    end
+end 
+    
+    % =====================================================================
+    % 5. Capon 成像 (根据开关决定使用哪个 Mask)
     % =====================================================================
     
-    % 5. Capon 成像
-    % 图3: 用原始数据 (展示脏的情况)
-    [pwRA_Full, ~] = dbfProc1D(fftRsltRg, 'limitAng', CFG_LIMIT_ANG, 'resAng', CFG_RES_ANG, ...
-        'limitR', CFG_LIMIT_R, 'Mask', [], 'pcEn', 0, 'drawEn', 0);
+    if ENABLE_FULL_ANGLE_VIEW
+        % 模式A: 全角度显示 (Mask 全为1，不遮挡任何东西)
+        procMask = ones(size(ShadowMask)); 
+        view_str = ' (Full View)';
+    else
+        % 模式B: 仅显示 ROI (使用 ShadowMask 遮挡非ROI区域)
+        procMask = ShadowMask;
+        view_str = ' (ROI Only)';
+    end
+    
+    % 图3: 原始数据
+    [pwRA_Baseline, ~] = dbfProc1D(fftRsltRg, 'limitAng', CFG_LIMIT_ANG, 'resAng', CFG_RES_ANG, ...
+        'limitR', CFG_LIMIT_R, 'Mask', procMask, 'pcEn', 0, 'drawEn', 0);
         
-    % 图4: 用【净化后的数据】 + 【Mask】
-    % 这就是你的核心思路：先减去车的影响，再用 Mask 聚焦 ROI
+    % 图4: 净化数据
     [pwRA_Roi, ~] = dbfProc1D(fftRsltRg_Clean, 'limitAng', CFG_LIMIT_ANG, 'resAng', CFG_RES_ANG, ...
-        'limitR', CFG_LIMIT_R, 'Mask', ShadowMask, 'pcEn', 0, 'drawEn', 0);
+        'limitR', CFG_LIMIT_R, 'Mask', procMask, 'pcEn', 0, 'drawEn', 0);
         
     % --- 绘图部分 ---
     if ~ishandle(hFig), break; end 
@@ -222,8 +280,15 @@ for iFrm = 1 : 1 : TOTAL_FRAMES
     
     % 更新标题与轮廓
     set(title_str1, 'String', {['Frame ' num2str(iFrm)], ['\color{red}' PHASE_NAME]});
+    
+    % 更新图3/4标题，指示当前模式
+    set(title_str3, 'String', ['3. 原始数据 + Capon' view_str]);
+    set(title_str4, 'String', ['4. RELAX净化 + Capon' view_str]);
+
     delete(findobj(ax1, 'Type', 'contour')); 
     contour(ax1, X_Plot, Y_Plot, ShadowMask, [0.5 0.5], 'm--', 'LineWidth', 1);
+    
+    % 无论什么模式，都把 ROI 的框画出来作为参考
     delete(findobj(ax3, 'Type', 'contour'));
     contour(ax3, X_Plot, Y_Plot, ShadowMask, [0.5 0.5], 'w--', 'LineWidth', 1.5);
     delete(findobj(ax4, 'Type', 'contour'));
@@ -233,14 +298,19 @@ for iFrm = 1 : 1 : TOTAL_FRAMES
     mag_data = abs(fftRsltRg);
     range_profile = 20 * log10(mean(mag_data, [2, 3, 4]) + 1e-6);
     set(h_rfft_line, 'XData', full_grid.range, 'YData', range_profile);
-    % 【已移除】h_xline_A 更新代码
     
     % 更新热力图
-    set(h_pcolor1, 'CData', pwRA_Full); 
+    set(h_pcolor1, 'CData', pwRA_Baseline); 
     set(h_pcolor2, 'CData', pwRA_Roi); 
+    
+    % =======================================================
+    % 【已删除】强制统一色标范围 (Lock CLim)
+    % 现在使用 MATLAB 默认的 Auto-Scaling
+    % =======================================================
     
     drawnow limitrate; 
 end
+
 %% ================= 辅助函数: 通用坐标变换 =================
 function pts_radar = transform_world_to_radar(pts_world, v, yaw, t)
     dy = v * t;
