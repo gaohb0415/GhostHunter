@@ -3,6 +3,10 @@ function [fftRsltRg, pcRg] = fftRange(radarData, varargin)
 % FFT点数自动选择为一个Chirp的ADC采样数
 % 输入:
 % 1. radarData: 雷达数据矩阵, [ADC, Chirp/Velocity, Rx, Tx]
+%   ADC：采样点维度，一个chirp中采集了多少个点
+%   chirp：脉冲维度，一帧中发送了多少个chirp
+%   nRx：接收天线数量
+%   nTx：发射天线维度
 %
 % 2. varargin: Matlab中的可变参数
 %     - windowEn: FFT时是否加窗. 0-否; 1-是
@@ -11,6 +15,11 @@ function [fftRsltRg, pcRg] = fftRange(radarData, varargin)
 %     - logEn: 是否将纵坐标设为dB. 0-否; 1-是
 % 输出:
 % 1. fftRsltRg: 雷达数据矩阵, [Range, Chirp/Velocity, Rx, Tx]
+%   range：第i个点所代表的距离门
+%   chirp：
+%   rx：
+%   tx： 上面三个含义同上
+%
 % 2. pcRg: 距离点云
 %     - .iRange: Range bin索引
 %     - .range: 距离
