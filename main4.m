@@ -89,7 +89,7 @@ title_str4 = title('4. 干扰对消 (有RELAX)');
 
 %% 3. 循环
 % 
-for iFrm = 1 : 5 : 210
+for iFrm = 170 : 1 : 170
 
 
     % 数据准备与先验辅助定位阶段
@@ -204,7 +204,7 @@ for iFrm = 1 : 5 : 210
         % --- 迭代优化 ---
         MAX_RELAX_ITER = 5; % 给它 5 次修正机会
 
-        for iter = 1 : MAX_RELAX_ITER
+        for iter = 1 : MAX_RELAX_ITER                                                                                                                                                                                                                                                                                                                                                                                                      
             % 对每一个已经找到的嫌疑人 k (1, 2, 3) 进行轮询修正
             for k = 1 : K_Comps
 
