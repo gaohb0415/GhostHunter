@@ -33,6 +33,7 @@ function car_pts = get_car_dynamic_coords(iFrm, car_init_world, radar_vel, radar
     car_pts.C = pack_pt(2); % 右前 (Phase 2 切点)
     car_pts.K = pack_pt(3); % 左前 (最远点)
     car_pts.B = pack_pt(4); % 左后 (左切点)
+   
     
     % 调试用的所有点
     car_pts.all_x = X_radar;
@@ -41,4 +42,6 @@ function car_pts = get_car_dynamic_coords(iFrm, car_init_world, radar_vel, radar
     % 为了兼容旧逻辑，重新计算动态最远点(万一K不是P3)
     [~, idx_far] = max(rho);
     car_pts.K_Dynamic = pack_pt(idx_far); 
+
+    
 end
