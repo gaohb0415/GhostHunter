@@ -45,8 +45,13 @@ Y_Plot = Rng_Grid .* cosd(Ang_Grid);
 ground_truth_world.car.x = [1.11, 2.87, 2.87, 1.11];
 ground_truth_world.car.y = [3.63, 3.63, 7.97, 7.97];
 car_init_mat = [ground_truth_world.car.x', ground_truth_world.car.y'];
-ped_path_x = [3.44, 3.44, 1.11];
-ped_path_y = [5.8, 8.62, 8.62];
+
+%%ped_path_x = [3.44, 3.44, 1.11];
+%%ped_path_y = [5.8, 8.62, 8.62];
+
+ped_path_x = [0, 0, 0];
+ped_path_y = [0, 0, 0];
+
 ped_init_mat = [ped_path_x', ped_path_y'];
 
 
@@ -90,7 +95,7 @@ fprintf('Processing RELAX in small time-blocks to handle Doppler.\n');
 
 % 从第14帧附近开始跑，验证是否崩溃
 % 外层大循环的是帧数，每次都是一帧一帧处理（可以调整步进）
-for iFrm = 170 : 1 : 210 
+for iFrm = 72 : 1 : 72 
     
     current_time = (iFrm - 1) * FRAME_PERIOD;
     
